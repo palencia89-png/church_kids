@@ -1,6 +1,21 @@
 import { useState, useEffect } from 'react';
-import { supabase, type Attendance, type Child } from '../lib/supabase';
-import { Calendar, Search, Baby, Loader2, BarChart3, AlertTriangle, Heart, ShieldAlert, Phone, Clock } from 'lucide-react';
+import { supabase, type Attendance, type Child, type Category } from '../lib/supabase';
+import { fetchCategories, getChildCategory, getCategoryBadgeStyle, formatAge } from '../lib/categories';
+import { exportAttendanceToExcel } from '../lib/excelExport';
+import {
+  Calendar,
+  Search,
+  Baby,
+  Loader2,
+  BarChart3,
+  AlertTriangle,
+  Heart,
+  ShieldAlert,
+  Phone,
+  Clock,
+  FileSpreadsheet,
+  FolderKanban,
+} from 'lucide-react';
 
 type AttendanceWithChild = Attendance & { child: Child };
 type DateFilter = 'today' | 'week' | 'month' | 'all';
@@ -21,7 +36,7 @@ function startOfMonthStr() {
 }
 
 function formatDate(d: string) {
-  return new Date(d + 'T12:00:00').toLocaleDateString('es', {
+  return new Date(d + 'T12:00:00').toLocaleDateString('es-ES', {
     month: 'short', day: 'numeric', year: 'numeric'
   });
 }
@@ -51,8 +66,14 @@ function getEmotBadge(cond?: string) {
 export default function ConditionsReport() {
   const [filter, setFilter] = useState<DateFilter>('today');
   const [records, setRecords] = useState<AttendanceWithChild[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [exporting, setExporting] = useState(false);
+
+  useEffect(() => {
+    fetchCategories().then(setCategories);
+  }, []);
 
   const fetchRecords = async () => {
     setLoading(true);
@@ -104,6 +125,12 @@ export default function ConditionsReport() {
   // Distribution counters
   const physStats = { Sano: 0, Lesión: 0, Enfermo: 0, Cansado: 0, Otro: 0 };
   const emotStats = { Feliz: 0, Calmado: 0, Triste: 0, Llorando: 0, Enojado: 0 };
+  const catStats: Record<string, number> = {};
+
+  categories.forEach(c => {
+    catStats[c.id] = 0;
+  });
+  let unassignedCatCount = 0;
 
   records.forEach(r => {
     const pc = (r.physical_condition || 'Sano') as keyof typeof physStats;
@@ -113,7 +140,34 @@ export default function ConditionsReport() {
     const ec = (r.emotional_condition || 'Feliz') as keyof typeof emotStats;
     if (emotStats[ec] !== undefined) emotStats[ec]++;
     else emotStats.Feliz++;
+
+    const c = getChildCategory(r.child, categories);
+    if (c && catStats[c.id] !== undefined) {
+      catStats[c.id]++;
+    } else {
+      unassignedCatCount++;
+    }
   });
+
+  const handleExportExcel = () => {
+    if (records.length === 0) {
+      alert('No hay registros para exportar en este período.');
+      return;
+    }
+    setExporting(true);
+    try {
+      const filterLabel = filter === 'today' ? `Hoy_${todayStr()}` : filter === 'week' ? 'Ultimos_7_Dias' : filter === 'month' ? 'Mes_Actual' : 'Historico_Completo';
+      exportAttendanceToExcel(records, categories, {
+        dateLabel: filterLabel,
+        filenamePrefix: 'Reporte_Condiciones_Asistencia',
+      });
+    } catch (err) {
+      console.error(err);
+      alert('Error al exportar el archivo Excel.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -125,29 +179,41 @@ export default function ConditionsReport() {
           </div>
           <div>
             <h2 className="font-bold text-gray-900 text-base">Informe de Condiciones</h2>
-            <p className="text-xs text-gray-500">Salud, emociones y alertas de ingreso</p>
+            <p className="text-xs text-gray-500">Salud, emociones, categorías y alertas de ingreso</p>
           </div>
         </div>
 
-        <div className="flex bg-gray-100 p-1 rounded-xl gap-1">
-          {[
-            { id: 'today', label: 'Hoy' },
-            { id: 'week', label: '7 días' },
-            { id: 'month', label: 'Mes' },
-            { id: 'all', label: 'Todos' },
-          ].map(opt => (
-            <button
-              key={opt.id}
-              onClick={() => setFilter(opt.id as DateFilter)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                filter === opt.id
-                  ? 'bg-white text-gray-800 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-900'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex bg-gray-100 p-1 rounded-xl gap-1">
+            {[
+              { id: 'today', label: 'Hoy' },
+              { id: 'week', label: '7 días' },
+              { id: 'month', label: 'Mes' },
+              { id: 'all', label: 'Todos' },
+            ].map(opt => (
+              <button
+                key={opt.id}
+                onClick={() => setFilter(opt.id as DateFilter)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  filter === opt.id
+                    ? 'bg-white text-gray-800 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-900'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={handleExportExcel}
+            disabled={exporting || records.length === 0}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-all disabled:opacity-50"
+            title="Exportar registros filtrados a Excel"
+          >
+            {exporting ? <Loader2 size={15} className="animate-spin" /> : <FileSpreadsheet size={15} />}
+            <span>Exportar Excel</span>
+          </button>
         </div>
       </div>
 
@@ -181,6 +247,49 @@ export default function ConditionsReport() {
                 </p>
               </div>
             </div>
+
+            {/* Categories distribution card */}
+            {categories.length > 0 && (
+              <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-4">
+                <div className="flex items-center gap-2 border-b border-gray-50 pb-3">
+                  <FolderKanban size={16} className="text-sky-500" />
+                  <h3 className="font-bold text-gray-800 text-xs uppercase tracking-wider">Asistencia por Categorías</h3>
+                </div>
+                <div className="space-y-3.5">
+                  {categories.map(cat => {
+                    const style = getCategoryBadgeStyle(cat.color);
+                    const count = catStats[cat.id] || 0;
+                    const percent = totalCheckIns > 0 ? Math.round((count / totalCheckIns) * 100) : 0;
+
+                    return (
+                      <div key={cat.id} className="space-y-1">
+                        <div className="flex justify-between text-xs font-semibold text-gray-700">
+                          <span className="flex items-center gap-1.5">
+                            <span className={`w-2.5 h-2.5 rounded-full ${style.dot}`} />
+                            <span>{cat.name} ({cat.min_age}-{cat.max_age} años)</span>
+                          </span>
+                          <span className="text-gray-500">{count} ({percent}%)</span>
+                        </div>
+                        <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${style.dot}`}
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {unassignedCatCount > 0 && (
+                    <div className="space-y-1 pt-1">
+                      <div className="flex justify-between text-xs font-medium text-gray-500">
+                        <span>Sin categoría asignada</span>
+                        <span>{unassignedCatCount} ({totalCheckIns > 0 ? Math.round((unassignedCatCount / totalCheckIns) * 100) : 0}%)</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Physical Conditions distribution card */}
             <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-4">
@@ -295,6 +404,9 @@ export default function ConditionsReport() {
                   filteredAlerts.map(rec => {
                     const phys = getPhysBadge(rec.physical_condition);
                     const emot = getEmotBadge(rec.emotional_condition);
+                    const cat = getChildCategory(rec.child, categories);
+                    const catStyle = cat ? getCategoryBadgeStyle(cat.color) : null;
+
                     return (
                       <div
                         key={rec.id}
@@ -312,12 +424,20 @@ export default function ConditionsReport() {
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h4 className="font-bold text-gray-800 text-xs truncate">{rec.child?.full_name ?? 'Desconocido'}</h4>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-bold text-gray-800 text-xs truncate">{rec.child?.full_name ?? 'Desconocido'}</h4>
+                              {cat && catStyle && (
+                                <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold border ${catStyle.bg} ${catStyle.text} ${catStyle.border}`}>
+                                  {cat.name}
+                                </span>
+                              )}
+                            </div>
                             <div className="flex items-center gap-1.5 text-[10px] text-gray-400 mt-0.5">
+                              {rec.child?.birthdate && <span>{formatAge(rec.child.birthdate)} ·</span>}
                               <Calendar size={10} />
                               <span>{formatDate(rec.event_date)}</span>
                               <Clock size={10} className="ml-1" />
-                              <span>{new Date(rec.checked_in_at).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</span>
+                              <span>{new Date(rec.checked_in_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>
                             </div>
                           </div>
                         </div>

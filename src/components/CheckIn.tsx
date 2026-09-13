@@ -1,23 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, type Child, type Attendance } from '../lib/supabase';
-import { Search, CheckCircle2, Loader2, UserCheck, Baby, X } from 'lucide-react';
+import { supabase, type Child, type Attendance, type Category } from '../lib/supabase';
+import { fetchCategories, getChildCategory, getCategoryBadgeStyle, formatAge } from '../lib/categories';
+import { Search, CheckCircle2, Loader2, UserCheck, Baby, X, FolderKanban } from 'lucide-react';
 
 type Props = {
   onCheckedIn?: () => void;
 };
 
-function getAge(birthdate: string | null): string {
-  if (!birthdate) return '';
-  const diff = Date.now() - new Date(birthdate).getTime();
-  const years = Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
-  return `${years} años`;
-}
-
 function todayStr() {
   return new Date().toISOString().split('T')[0];
 }
 
-function TodayList({ ids }: { ids: string[] }) {
+function TodayList({ ids, categories }: { ids: string[]; categories: Category[] }) {
   const [children, setChildren] = useState<Child[]>([]);
 
   useEffect(() => {
@@ -32,27 +26,42 @@ function TodayList({ ids }: { ids: string[] }) {
   }, [ids.join(',')]);
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-      {children.map(c => (
-        <div key={c.id} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50">
-          <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
-            {c.photo_url ? (
-              <img src={c.photo_url} alt={c.full_name} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <Baby size={14} className="text-gray-300" />
-              </div>
-            )}
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+      {children.map(c => {
+        const cat = getChildCategory(c, categories);
+        const style = cat ? getCategoryBadgeStyle(cat.color) : null;
+        return (
+          <div key={c.id} className="flex items-center gap-2.5 p-2 rounded-xl bg-gray-50 border border-gray-100">
+            <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
+              {c.photo_url ? (
+                <img src={c.photo_url} alt={c.full_name} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Baby size={14} className="text-gray-400" />
+                </div>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="text-xs font-semibold text-gray-800 truncate block">{c.full_name}</span>
+              {cat && style ? (
+                <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${style.bg} ${style.text} inline-block`}>
+                  {cat.name}
+                </span>
+              ) : (
+                <span className="text-[10px] text-gray-400">{formatAge(c.birthdate)}</span>
+              )}
+            </div>
           </div>
-          <span className="text-xs font-medium text-gray-700 truncate">{c.full_name}</span>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
 
 export default function CheckIn({ onCheckedIn }: Props) {
   const [query, setQuery] = useState('');
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCatFilter, setSelectedCatFilter] = useState<string>('all');
   const [children, setChildren] = useState<Child[]>([]);
   const [todayAttendance, setTodayAttendance] = useState<Attendance[]>([]);
   const [loading, setLoading] = useState(false);
@@ -75,28 +84,37 @@ export default function CheckIn({ onCheckedIn }: Props) {
 
   useEffect(() => {
     loadTodayAttendance();
+    fetchCategories().then(setCategories);
   }, [loadTodayAttendance]);
 
   useEffect(() => {
-    if (!query.trim()) {
-      setChildren([]);
-      return;
-    }
     const timeout = setTimeout(async () => {
       setLoading(true);
-      const { data } = await supabase
+      let q = supabase
         .from('children')
         .select('*')
-        .ilike('full_name', `%${query}%`)
         .order('full_name')
-        .limit(20);
+        .limit(30);
+
+      if (query.trim()) {
+        q = q.ilike('full_name', `%${query.trim()}%`);
+      }
+
+      const { data } = await q;
       setChildren((data as Child[]) ?? []);
       setLoading(false);
-    }, 300);
+    }, 250);
     return () => clearTimeout(timeout);
   }, [query]);
 
   const checkedInIds = new Set(todayAttendance.map(a => a.child_id));
+
+  // Filter children list by category if category filter is selected
+  const displayedChildren = children.filter(c => {
+    if (selectedCatFilter === 'all') return true;
+    const cat = getChildCategory(c, categories);
+    return cat?.id === selectedCatFilter;
+  });
 
   const confirmCheckIn = async () => {
     if (!selectedChild) return;
@@ -124,6 +142,9 @@ export default function CheckIn({ onCheckedIn }: Props) {
     }
   };
 
+  const selectedChildCat = selectedChild ? getChildCategory(selectedChild, categories) : null;
+  const selectedChildCatStyle = selectedChildCat ? getCategoryBadgeStyle(selectedChildCat.color) : null;
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
@@ -133,10 +154,11 @@ export default function CheckIn({ onCheckedIn }: Props) {
           </div>
           <div>
             <h2 className="font-semibold text-gray-800">Registrar Asistencia</h2>
-            <p className="text-xs text-gray-500">Busca al niño por nombre y registra su ingreso</p>
+            <p className="text-xs text-gray-500">Busca al niño por nombre y registra su ingreso con su categoría</p>
           </div>
         </div>
 
+        {/* Search Input */}
         <div className="relative">
           <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
@@ -152,27 +174,65 @@ export default function CheckIn({ onCheckedIn }: Props) {
           )}
         </div>
 
-        {query.trim() && children.length === 0 && !loading && (
-          <p className="text-sm text-gray-500 text-center mt-4 py-4">
-            No se encontraron niños con ese nombre.
+        {/* Category Pills Filter for Quick Group Selection */}
+        {categories.length > 0 && (
+          <div className="mt-3 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
+            <button
+              onClick={() => setSelectedCatFilter('all')}
+              className={`px-3 py-1.5 rounded-xl font-medium transition-all whitespace-nowrap ${
+                selectedCatFilter === 'all'
+                  ? 'bg-emerald-600 text-white shadow-sm font-semibold'
+                  : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'
+              }`}
+            >
+              Todas las categorías
+            </button>
+            {categories.map(cat => {
+              const style = getCategoryBadgeStyle(cat.color);
+              const isSelected = selectedCatFilter === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedCatFilter(cat.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-medium transition-all whitespace-nowrap border ${
+                    isSelected
+                      ? `${style.bg} ${style.text} ${style.border} ring-2 ring-emerald-500 font-bold`
+                      : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${style.dot}`} />
+                  <span>{cat.name}</span>
+                  <span className="text-[10px] opacity-75">({cat.min_age}-{cat.max_age}a)</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {displayedChildren.length === 0 && !loading && (
+          <p className="text-sm text-gray-500 text-center mt-6 py-4">
+            No se encontraron niños {query ? `para "${query}"` : 'en esta categoría'}.
           </p>
         )}
 
-        {children.length > 0 && (
+        {displayedChildren.length > 0 && (
           <div className="mt-4 space-y-2">
-            {children.map(child => {
+            {displayedChildren.map(child => {
               const alreadyIn = checkedInIds.has(child.id);
               const isCheckingIn = checkingIn === child.id;
+              const cat = getChildCategory(child, categories);
+              const style = cat ? getCategoryBadgeStyle(cat.color) : null;
+
               return (
                 <div
                   key={child.id}
-                  className={`flex items-center gap-4 p-3 rounded-xl border transition-all ${
+                  className={`flex items-center gap-3.5 p-3 rounded-xl border transition-all ${
                     alreadyIn
-                      ? 'bg-emerald-50 border-emerald-200'
-                      : 'bg-white border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/30'
+                      ? 'bg-emerald-50/60 border-emerald-200'
+                      : 'bg-white border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/20'
                   }`}
                 >
-                  <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-100 flex-shrink-0">
+                  <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-100 flex-shrink-0 shadow-inner">
                     {child.photo_url ? (
                       <img src={child.photo_url} alt={child.full_name} className="w-full h-full object-cover" />
                     ) : (
@@ -182,10 +242,17 @@ export default function CheckIn({ onCheckedIn }: Props) {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-800 text-sm truncate">{child.full_name}</p>
-                    <p className="text-xs text-gray-500 truncate">
-                      {getAge(child.birthdate)}{child.birthdate && child.parent1_name ? ' · ' : ''}{child.parent1_name}
-                    </p>
+                    <p className="font-semibold text-gray-800 text-sm truncate">{child.full_name}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-xs text-gray-500 truncate">
+                        {formatAge(child.birthdate)}{child.birthdate && child.parent1_name ? ' · ' : ''}{child.parent1_name}
+                      </span>
+                      {cat && style && (
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold border ${style.bg} ${style.text} ${style.border}`}>
+                          <span>{cat.name}</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <button
                     onClick={() => {
@@ -195,7 +262,7 @@ export default function CheckIn({ onCheckedIn }: Props) {
                       setSelectedChild(child);
                     }}
                     disabled={alreadyIn || isCheckingIn}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
                       alreadyIn
                         ? 'bg-emerald-100 text-emerald-700 cursor-default'
                         : isCheckingIn
@@ -217,13 +284,14 @@ export default function CheckIn({ onCheckedIn }: Props) {
         )}
 
         {justChecked && (
-          <div className="mt-4 flex items-center gap-2 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-sm font-medium">
+          <div className="mt-4 flex items-center gap-2 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-sm font-medium animate-fadeIn">
             <CheckCircle2 size={18} />
             Asistencia registrada exitosamente
           </div>
         )}
       </div>
 
+      {/* Today's Attendance List */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-gray-800">Asistencia de hoy</h3>
@@ -234,7 +302,7 @@ export default function CheckIn({ onCheckedIn }: Props) {
         {todayAttendance.length === 0 ? (
           <p className="text-sm text-gray-400 text-center py-4">Aún no hay registros hoy</p>
         ) : (
-          <TodayList ids={Array.from(checkedInIds)} />
+          <TodayList ids={Array.from(checkedInIds)} categories={categories} />
         )}
       </div>
 
@@ -260,9 +328,9 @@ export default function CheckIn({ onCheckedIn }: Props) {
 
             {/* Body */}
             <div className="p-6 space-y-5">
-              {/* Resumen del niño */}
+              {/* Resumen del niño con Categoría */}
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
-                <div className="w-11 h-11 rounded-lg overflow-hidden bg-gray-200 flex-shrink-0">
+                <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-200 flex-shrink-0">
                   {selectedChild.photo_url ? (
                     <img src={selectedChild.photo_url} alt={selectedChild.full_name} className="w-full h-full object-cover" />
                   ) : (
@@ -271,11 +339,22 @@ export default function CheckIn({ onCheckedIn }: Props) {
                     </div>
                   )}
                 </div>
-                <div>
-                  <h4 className="font-semibold text-gray-800 text-xs">{selectedChild.full_name}</h4>
-                  <p className="text-[11px] text-gray-500">
-                    Edad: {getAge(selectedChild.birthdate)} · Tutor: {selectedChild.parent1_name}
-                  </p>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-bold text-gray-800 text-sm">{selectedChild.full_name}</h4>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-[11px] text-gray-500">
+                      {formatAge(selectedChild.birthdate)} · Tutor: {selectedChild.parent1_name}
+                    </p>
+                  </div>
+                  {selectedChildCat && selectedChildCatStyle && (
+                    <div className="mt-1">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${selectedChildCatStyle.bg} ${selectedChildCatStyle.text} ${selectedChildCatStyle.border}`}>
+                        <FolderKanban size={10} />
+                        <span>{selectedChildCat.name}</span>
+                        <span className="opacity-75">({selectedChildCat.min_age}-{selectedChildCat.max_age}a)</span>
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 

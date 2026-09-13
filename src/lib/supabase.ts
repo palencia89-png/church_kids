@@ -5,6 +5,16 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+export type Category = {
+  id: string;
+  name: string;
+  min_age: number;
+  max_age: number;
+  color: string;
+  description?: string;
+  created_at?: string;
+};
+
 export type Child = {
   id: string;
   full_name: string;
@@ -15,6 +25,8 @@ export type Child = {
   parent2_name: string;
   parent2_phone: string;
   notes: string;
+  category_id?: string | null;
+  category?: Category | null;
   created_at: string;
 };
 

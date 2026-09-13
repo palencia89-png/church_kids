@@ -1,16 +1,17 @@
 import { useState } from 'react';
-import { UserCheck, Users, ClipboardList, Church, LogOut, Loader2, BarChart3 } from 'lucide-react';
+import { UserCheck, Users, ClipboardList, Church, LogOut, Loader2, BarChart3, FolderKanban } from 'lucide-react';
 import { useAuth } from './lib/auth';
 import CheckIn from './components/CheckIn';
 import ChildrenList from './components/ChildrenList';
 import AttendanceHistory from './components/AttendanceHistory';
 import ConditionsReport from './components/ConditionsReport';
+import CategoriesManager from './components/CategoriesManager';
 import RegisterChild from './components/RegisterChild';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import type { Child } from './lib/supabase';
 
-type Tab = 'checkin' | 'children' | 'history' | 'reports';
+type Tab = 'checkin' | 'children' | 'categories' | 'history' | 'reports';
 type AuthTab = 'login' | 'register';
 
 export default function App() {
@@ -47,6 +48,7 @@ export default function App() {
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'checkin', label: 'Asistencia', icon: <UserCheck size={18} /> },
     { id: 'children', label: 'Niños', icon: <Users size={18} /> },
+    { id: 'categories', label: 'Categorías', icon: <FolderKanban size={18} /> },
     { id: 'history', label: 'Historial', icon: <ClipboardList size={18} /> },
     { id: 'reports', label: 'Reportes', icon: <BarChart3 size={18} /> },
   ];
@@ -54,14 +56,14 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-gray-100 sticky top-0 z-40 shadow-sm">
-        <div className="max-w-2xl mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-sky-500 flex items-center justify-center flex-shrink-0 shadow-sm">
               <Church size={20} className="text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-gray-900 leading-tight text-base">Ministerio de Ninos</h1>
-              <p className="text-xs text-gray-400 leading-tight">Control de asistencia</p>
+              <h1 className="font-bold text-gray-900 leading-tight text-base">Ministerio de Niños</h1>
+              <p className="text-xs text-gray-400 leading-tight">Control y Registro de Asistencia</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -79,27 +81,27 @@ export default function App() {
       </header>
 
       <div className="bg-white border-b border-gray-100 sticky top-16 z-30">
-        <div className="max-w-2xl mx-auto px-4">
-          <nav className="flex">
+        <div className="max-w-4xl mx-auto px-4">
+          <nav className="flex overflow-x-auto scrollbar-none">
             {tabs.map(t => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 px-4 py-3.5 text-sm font-medium border-b-2 transition-colors flex-1 justify-center ${
+                className={`flex items-center gap-2 px-3.5 py-3.5 text-sm font-medium border-b-2 transition-colors flex-1 justify-center whitespace-nowrap ${
                   tab === t.id
-                    ? 'border-sky-500 text-sky-600'
+                    ? 'border-sky-500 text-sky-600 font-bold'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
                 {t.icon}
-                <span className="hidden sm:inline">{t.label}</span>
+                <span>{t.label}</span>
               </button>
             ))}
           </nav>
         </div>
       </div>
 
-      <main className={`${tab === 'reports' ? 'max-w-4xl' : 'max-w-2xl'} mx-auto px-4 py-6`}>
+      <main className={`${tab === 'reports' || tab === 'categories' ? 'max-w-4xl' : 'max-w-2xl'} mx-auto px-4 py-6`}>
         {tab === 'checkin' && (
           <CheckIn onCheckedIn={() => setRefreshKey(k => k + 1)} />
         )}
@@ -109,6 +111,9 @@ export default function App() {
             onEdit={child => { setEditChild(child); setShowRegister(true); }}
             refreshKey={refreshKey}
           />
+        )}
+        {tab === 'categories' && (
+          <CategoriesManager />
         )}
         {tab === 'history' && <AttendanceHistory />}
         {tab === 'reports' && <ConditionsReport />}
