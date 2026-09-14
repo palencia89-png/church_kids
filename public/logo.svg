@@ -1,0 +1,236 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 650 360" width="100%" height="100%">
+  <defs>
+    <!-- Gradients -->
+    <linearGradient id="dropGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284C7"/>
+      <stop offset="50%" stop-color="#0997D9"/>
+      <stop offset="100%" stop-color="#38BDF8"/>
+    </linearGradient>
+
+    <linearGradient id="sunGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#0284C7"/>
+    </linearGradient>
+
+    <!-- Filters for sticker outline look -->
+    <filter id="whiteOutline" x="-20%" y="-20%" width="140%" height="140%">
+      <feMorphology in="SourceAlpha" result="DILATED" operator="dilate" radius="4"/>
+      <feFlood flood-color="#FFFFFF" result="WHITE"/>
+      <feComposite in="WHITE" in2="DILATED" operator="in" result="OUTLINE"/>
+      <feMerge>
+        <feMergeNode in="OUTLINE"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="softShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <!-- Sticker background contour for entire logo -->
+  <g filter="url(#softShadow)">
+    
+    <!-- 1. LEFT BLUE EMBLEM ICON -->
+    <g id="emblem-group" transform="translate(15, 75)">
+      <!-- Outer White Outline border -->
+      <path d="M 105 10 C 175 40 185 130 145 185 C 105 240 15 225 8 160 C 2 95 65 5 105 10 Z" 
+            fill="#FFFFFF" stroke="#FFFFFF" stroke-width="14" stroke-linejoin="round"/>
+      <!-- Outer Drop Body -->
+      <path d="M 105 10 C 175 40 185 130 145 185 C 105 240 15 225 8 160 C 2 95 65 5 105 10 Z" 
+            fill="url(#dropGrad)"/>
+      <!-- Inner Cutout / Hole -->
+      <path d="M 98 48 C 140 70 145 130 118 165 C 90 200 35 185 30 145 C 26 100 68 35 98 48 Z" 
+            fill="#FFFFFF"/>
+      
+      <!-- Center Sunburst / Gear / Cross Icon -->
+      <g transform="translate(85, 120)">
+        <!-- Rays -->
+        <circle cx="0" cy="0" r="26" fill="url(#sunGrad)"/>
+        <!-- Sunburst teeth -->
+        <path d="M 0 -34 L 4 -28 L -4 -28 Z M 0 34 L 4 28 L -4 28 Z M -34 0 L -28 4 L -28 -4 Z M 34 0 L 28 4 L 28 -4 Z
+                 M -24 -24 L -18 -21 L -21 -18 Z M 24 24 L 18 21 L 21 18 Z M -24 24 L -18 21 L -21 28 Z M 24 -24 L 18 -21 L 21 -28 Z" 
+              fill="#0284C7"/>
+        <circle cx="0" cy="0" r="18" fill="#FFFFFF"/>
+        <!-- Inner cross pattern -->
+        <path d="M -4 -10 H 4 V 10 H -4 Z M -10 -4 H 10 V 4 H -10 Z" fill="#0284C7" rx="1"/>
+      </g>
+    </g>
+
+    <!-- 2. THE 4 JUMPING CHILDREN -->
+    <g id="kids-group" transform="translate(200, 20)">
+      
+      <!-- Kid 1: Girl with pigtails in yellow dress -->
+      <g id="kid-1" transform="translate(15, 30)">
+        <!-- White contour -->
+        <path d="M -5 -5 H 45 V 95 H -5 Z" fill="none"/>
+        <!-- Legs & Shoes -->
+        <path d="M 8 68 L 2 84 M 24 68 L 30 84" stroke="#FDBA74" stroke-width="4.5" stroke-linecap="round"/>
+        <ellipse cx="0" cy="85" rx="6.5" ry="4" fill="#EC4899"/>
+        <ellipse cx="32" cy="85" rx="6.5" ry="4" fill="#EC4899"/>
+        <!-- Dress/Body -->
+        <path d="M 6 42 Q 16 38 26 42 L 32 68 H 0 Z" fill="#FACC15" stroke="#EAB308" stroke-width="2"/>
+        <path d="M 0 68 Q 16 73 32 68" stroke="#F97316" stroke-width="2" fill="none"/>
+        <!-- Arms -->
+        <path d="M 6 45 Q -8 30 -4 18 M 26 45 Q 40 30 36 18" stroke="#FDBA74" stroke-width="4" stroke-linecap="round" fill="none"/>
+        <circle cx="-4" cy="17" r="3.5" fill="#FDBA74"/>
+        <circle cx="36" cy="17" r="3.5" fill="#FDBA74"/>
+        <!-- Head & Face -->
+        <circle cx="16" cy="26" r="15" fill="#FED7AA"/>
+        <!-- Eyes & Smile -->
+        <circle cx="11" cy="25" r="2" fill="#1E293B"/>
+        <circle cx="21" cy="25" r="2" fill="#1E293B"/>
+        <path d="M 10 29 Q 16 35 22 29" stroke="#E11D48" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <!-- Cheeks -->
+        <circle cx="8" cy="28" r="2.5" fill="#F472B6" opacity="0.6"/>
+        <circle cx="24" cy="28" r="2.5" fill="#F472B6" opacity="0.6"/>
+        <!-- Hair (Brown Pigtails) -->
+        <path d="M 2 24 C 2 10 30 10 30 24 C 28 16 4 16 2 24 Z" fill="#78350F"/>
+        <!-- Pigtails left/right -->
+        <path d="M 3 20 C -6 14 -4 28 3 26 Z" fill="#78350F"/>
+        <path d="M 29 20 C 38 14 36 28 29 26 Z" fill="#78350F"/>
+        <!-- Hair ribbons -->
+        <circle cx="3" cy="22" r="2.5" fill="#EC4899"/>
+        <circle cx="29" cy="22" r="2.5" fill="#EC4899"/>
+      </g>
+
+      <!-- Kid 2: Boy with red shirt & green shorts -->
+      <g id="kid-2" transform="translate(100, 20)">
+        <!-- Legs & Shoes -->
+        <path d="M 10 70 L 4 88 M 24 70 L 30 88" stroke="#FDBA74" stroke-width="4.5" stroke-linecap="round"/>
+        <ellipse cx="2" cy="89" rx="7" ry="4" fill="#10B981"/>
+        <ellipse cx="32" cy="89" rx="7" ry="4" fill="#10B981"/>
+        <!-- Shorts -->
+        <path d="M 5 54 H 29 V 70 H 20 V 62 H 14 V 70 H 5 Z" fill="#22C55E"/>
+        <!-- Shirt (Red/Orange) -->
+        <path d="M 4 38 Q 17 34 30 38 L 29 55 H 5 Z" fill="#EF4444"/>
+        <!-- Arms -->
+        <path d="M 5 42 Q -8 28 -2 15 M 29 42 Q 42 28 36 15" stroke="#FDBA74" stroke-width="4" stroke-linecap="round" fill="none"/>
+        <circle cx="-2" cy="14" r="3.5" fill="#FDBA74"/>
+        <circle cx="36" cy="14" r="3.5" fill="#FDBA74"/>
+        <!-- Head & Face -->
+        <circle cx="17" cy="24" r="15" fill="#FED7AA"/>
+        <circle cx="12" cy="23" r="2" fill="#1E293B"/>
+        <circle cx="22" cy="23" r="2" fill="#1E293B"/>
+        <path d="M 11 27 Q 17 34 23 27" stroke="#B91C1C" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <!-- Blonde Spiky Hair -->
+        <path d="M 2 20 C 2 6 32 6 32 20 C 30 12 25 8 17 12 C 10 6 4 12 2 20 Z" fill="#F59E0B"/>
+        <path d="M 10 10 L 14 2 M 17 9 L 19 0 M 23 10 L 26 3" stroke="#F59E0B" stroke-width="3" stroke-linecap="round"/>
+      </g>
+
+      <!-- Kid 3: Boy in blue shirt & dark shorts -->
+      <g id="kid-3" transform="translate(185, 25)">
+        <!-- Legs & Shoes -->
+        <path d="M 10 68 L 6 86 M 22 68 L 26 86" stroke="#FDBA74" stroke-width="4.5" stroke-linecap="round"/>
+        <ellipse cx="4" cy="87" rx="6.5" ry="4" fill="#3B82F6"/>
+        <ellipse cx="28" cy="87" rx="6.5" ry="4" fill="#3B82F6"/>
+        <!-- Shorts -->
+        <path d="M 5 52 H 27 V 68 H 18 V 60 H 13 V 68 H 5 Z" fill="#1E3A8A"/>
+        <!-- Shirt (Cyan Blue) -->
+        <path d="M 4 36 Q 16 32 28 36 L 27 53 H 5 Z" fill="#06B6D4"/>
+        <!-- Arms -->
+        <path d="M 5 40 Q -6 24 2 12 M 27 40 Q 38 24 30 12" stroke="#FDBA74" stroke-width="4" stroke-linecap="round" fill="none"/>
+        <circle cx="2" cy="11" r="3.5" fill="#FDBA74"/>
+        <circle cx="30" cy="11" r="3.5" fill="#FDBA74"/>
+        <!-- Head & Face -->
+        <circle cx="16" cy="22" r="14.5" fill="#FED7AA"/>
+        <circle cx="11" cy="21" r="2" fill="#1E293B"/>
+        <circle cx="21" cy="21" r="2" fill="#1E293B"/>
+        <path d="M 10 25 Q 16 32 22 25" stroke="#0369A1" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <!-- Dark Hair -->
+        <path d="M 2 18 C 2 6 30 6 30 18 C 26 10 18 8 16 11 C 12 8 5 12 2 18 Z" fill="#334155"/>
+      </g>
+
+      <!-- Kid 4: Girl with reddish hair in pink dress -->
+      <g id="kid-4" transform="translate(265, 30)">
+        <!-- Legs & Shoes -->
+        <path d="M 10 68 L 4 84 M 24 68 L 30 84" stroke="#FDBA74" stroke-width="4.5" stroke-linecap="round"/>
+        <ellipse cx="2" cy="85" rx="6.5" ry="4" fill="#8B5CF6"/>
+        <ellipse cx="32" cy="85" rx="6.5" ry="4" fill="#8B5CF6"/>
+        <!-- Dress (Pink) -->
+        <path d="M 6 40 Q 17 36 28 40 L 34 68 H 0 Z" fill="#EC4899"/>
+        <!-- Arms -->
+        <path d="M 6 43 Q -6 28 0 16 M 28 43 Q 40 28 34 16" stroke="#FDBA74" stroke-width="4" stroke-linecap="round" fill="none"/>
+        <circle cx="0" cy="15" r="3.5" fill="#FDBA74"/>
+        <circle cx="34" cy="15" r="3.5" fill="#FDBA74"/>
+        <!-- Head & Face -->
+        <circle cx="17" cy="24" r="14.5" fill="#FED7AA"/>
+        <circle cx="12" cy="23" r="2" fill="#1E293B"/>
+        <circle cx="22" cy="23" r="2" fill="#1E293B"/>
+        <path d="M 11 27 Q 17 33 23 27" stroke="#BE185D" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <!-- Long Auburn Hair -->
+        <path d="M 1 24 C -2 8 36 8 33 24 C 36 42 32 50 30 54 C 28 42 28 20 17 14 C 6 20 6 42 4 54 C 2 50 -1 42 1 24 Z" fill="#9A3412"/>
+      </g>
+
+    </g>
+
+    <!-- 3. TEXT "ADORACIÓN" -->
+    <g id="text-adoracion" transform="translate(200, 200)">
+      <!-- Outer white thick border for sticker effect -->
+      <text x="0" y="0" 
+            font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Arial Black', sans-serif" 
+            font-size="62" 
+            font-weight="900" 
+            letter-spacing="1.5" 
+            fill="#FFFFFF" 
+            stroke="#FFFFFF" 
+            stroke-width="16" 
+            stroke-linejoin="round">ADORACIÓN</text>
+
+      <!-- Cyan blue border outline -->
+      <text x="0" y="0" 
+            font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Arial Black', sans-serif" 
+            font-size="62" 
+            font-weight="900" 
+            letter-spacing="1.5" 
+            fill="#FFFFFF" 
+            stroke="#0284C7" 
+            stroke-width="7" 
+            stroke-linejoin="round">ADORACIÓN</text>
+
+      <!-- Inner Crisp White Text -->
+      <text x="0" y="0" 
+            font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Arial Black', sans-serif" 
+            font-size="62" 
+            font-weight="900" 
+            letter-spacing="1.5" 
+            fill="#FFFFFF">ADORACIÓN</text>
+    </g>
+
+    <!-- 4. TEXT "CHiLDren" -->
+    <g id="text-children" transform="translate(365, 272)">
+      <!-- White outer sticker outline background -->
+      <g stroke="#FFFFFF" stroke-width="12" stroke-linejoin="round" font-family="'Fredoka', 'Comic Sans MS', 'Arial Black', sans-serif" font-size="52" font-weight="900">
+        <text x="0" y="0">C</text>
+        <text x="36" y="2">H</text>
+        <text x="74" y="-2">i</text>
+        <text x="94" y="0">L</text>
+        <text x="124" y="2">D</text>
+        <text x="162" y="-1">r</text>
+        <text x="186" y="1">e</text>
+        <text x="216" y="0">n</text>
+      </g>
+      
+      <!-- Multi-color playful 3D letters -->
+      <g font-family="'Fredoka', 'Comic Sans MS', 'Arial Black', sans-serif" font-size="52" font-weight="900">
+        <!-- C - Red -->
+        <text x="0" y="0" fill="#EF4444" stroke="#DC2626" stroke-width="2.5">C</text>
+        <!-- H - Orange -->
+        <text x="36" y="2" fill="#F97316" stroke="#EA580C" stroke-width="2.5">H</text>
+        <!-- i - Yellow -->
+        <text x="74" y="-2" fill="#EAB308" stroke="#CA8A04" stroke-width="2.5">i</text>
+        <!-- L - Green -->
+        <text x="94" y="0" fill="#22C55E" stroke="#16A34A" stroke-width="2.5">L</text>
+        <!-- D - Cyan -->
+        <text x="124" y="2" fill="#06B6D4" stroke="#0891B2" stroke-width="2.5">D</text>
+        <!-- r - Blue -->
+        <text x="162" y="-1" fill="#3B82F6" stroke="#2563EB" stroke-width="2.5">r</text>
+        <!-- e - Purple/Pink -->
+        <text x="186" y="1" fill="#A855F7" stroke="#9333EA" stroke-width="2.5">e</text>
+        <!-- n - Light Orange/Yellow -->
+        <text x="216" y="0" fill="#F59E0B" stroke="#D97706" stroke-width="2.5">n</text>
+      </g>
+    </g>
+
+  </g>
+</svg>

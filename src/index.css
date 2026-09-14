@@ -1,3 +1,66 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Custom keyframes for Kids App startup animation */
+@keyframes kidHop1 {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-16px) rotate(-4deg); }
+}
+
+@keyframes kidHop2 {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-22px) rotate(3deg); }
+}
+
+@keyframes kidHop3 {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-18px) rotate(-3deg); }
+}
+
+@keyframes kidHop4 {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-24px) rotate(5deg); }
+}
+
+@keyframes floatParticle {
+  0% { transform: translateY(0px) scale(0.8) rotate(0deg); opacity: 0; }
+  30% { opacity: 0.8; }
+  100% { transform: translateY(-120px) scale(1.2) rotate(180deg); opacity: 0; }
+}
+
+@keyframes bouncePop {
+  0% { transform: scale(0.3); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  80% { transform: scale(0.95); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { filter: drop-shadow(0 0 15px rgba(56, 189, 248, 0.4)); }
+  50% { filter: drop-shadow(0 0 35px rgba(56, 189, 248, 0.8)); }
+}
+
+.animate-kid-1 {
+  animation: kidHop1 1.2s ease-in-out infinite;
+}
+
+.animate-kid-2 {
+  animation: kidHop2 1.4s ease-in-out 0.15s infinite;
+}
+
+.animate-kid-3 {
+  animation: kidHop3 1.3s ease-in-out 0.3s infinite;
+}
+
+.animate-kid-4 {
+  animation: kidHop4 1.5s ease-in-out 0.45s infinite;
+}
+
+.animate-bounce-pop {
+  animation: bouncePop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2.5s ease-in-out infinite;
+}

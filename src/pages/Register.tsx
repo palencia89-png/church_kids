@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../lib/auth';
-import { Church, Loader2, UserPlus, ArrowLeft } from 'lucide-react';
+import { Loader2, UserPlus, ArrowLeft } from 'lucide-react';
+import Logo from '../components/Logo';
 
 type Props = {
   onSwitchToLogin: () => void;
@@ -20,12 +21,12 @@ export default function Register({ onSwitchToLogin }: Props) {
     if (!email.trim() || !password.trim()) return;
 
     if (password !== confirmPassword) {
-      setError('Las contrasenas no coinciden');
+      setError('Las contraseñas no coinciden');
       return;
     }
 
     if (password.length < 6) {
-      setError('La contrasena debe tener al menos 6 caracteres');
+      setError('La contraseña debe tener al menos 6 caracteres');
       return;
     }
 
@@ -43,9 +44,9 @@ export default function Register({ onSwitchToLogin }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-sky-50 to-blue-50 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-gradient-to-br from-sky-50 to-blue-50 flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-lg border border-sky-100 p-8">
+        <div className="bg-white rounded-3xl shadow-xl border border-sky-100 p-8">
           <button
             onClick={onSwitchToLogin}
             className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition-colors mb-4"
@@ -54,9 +55,7 @@ export default function Register({ onSwitchToLogin }: Props) {
           </button>
 
           <div className="flex justify-center mb-4">
-            <div className="w-14 h-14 rounded-2xl bg-sky-500 flex items-center justify-center shadow-lg">
-              <Church size={28} className="text-white" />
-            </div>
+            <Logo size="lg" animated />
           </div>
 
           <h1 className="text-2xl font-bold text-gray-900 text-center mb-1">Crear cuenta</h1>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../lib/auth';
-import { Church, Loader2, LogIn } from 'lucide-react';
+import { Loader2, LogIn } from 'lucide-react';
+import Logo from '../components/Logo';
 
 type Props = {
   onSwitchToRegister: () => void;
@@ -21,20 +22,18 @@ export default function Login({ onSwitchToRegister }: Props) {
     try {
       await signIn(email, password);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al iniciar sesion');
+      setError(err instanceof Error ? err.message : 'Error al iniciar sesión');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-sky-50 to-blue-50 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-gradient-to-br from-sky-50 to-blue-50 flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-lg border border-sky-100 p-8">
-          <div className="flex justify-center mb-6">
-            <div className="w-14 h-14 rounded-2xl bg-sky-500 flex items-center justify-center shadow-lg">
-              <Church size={28} className="text-white" />
-            </div>
+        <div className="bg-white rounded-3xl shadow-xl border border-sky-100 p-8">
+          <div className="flex justify-center mb-4">
+            <Logo size="lg" animated />
           </div>
 
           <h1 className="text-2xl font-bold text-gray-900 text-center mb-1">Bienvenido</h1>

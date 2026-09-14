@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { UserCheck, Users, ClipboardList, Church, LogOut, Loader2, BarChart3, FolderKanban } from 'lucide-react';
+import { UserCheck, Users, ClipboardList, LogOut, Loader2, BarChart3, FolderKanban } from 'lucide-react';
 import { useAuth } from './lib/auth';
 import CheckIn from './components/CheckIn';
 import ChildrenList from './components/ChildrenList';
@@ -9,6 +9,8 @@ import CategoriesManager from './components/CategoriesManager';
 import RegisterChild from './components/RegisterChild';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import Logo from './components/Logo';
+import SplashScreen from './components/SplashScreen';
 import type { Child } from './lib/supabase';
 
 type Tab = 'checkin' | 'children' | 'categories' | 'history' | 'reports';
@@ -16,12 +18,17 @@ type AuthTab = 'login' | 'register';
 
 export default function App() {
   const { user, loading, signOut } = useAuth();
+  const [showSplash, setShowSplash] = useState(true);
   const [tab, setTab] = useState<Tab>('checkin');
   const [authTab, setAuthTab] = useState<AuthTab>('login');
   const [showRegister, setShowRegister] = useState(false);
   const [editChild, setEditChild] = useState<Child | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [signingOut, setSigningOut] = useState(false);
+
+  if (showSplash) {
+    return <SplashScreen onFinish={() => setShowSplash(false)} />;
+  }
 
   if (loading) {
     return (
@@ -58,12 +65,10 @@ export default function App() {
       <header className="bg-white border-b border-gray-100 sticky top-0 z-40 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-sky-500 flex items-center justify-center flex-shrink-0 shadow-sm">
-              <Church size={20} className="text-white" />
-            </div>
+            <Logo size="sm" />
             <div>
-              <h1 className="font-bold text-gray-900 leading-tight text-base">Ministerio de Niños</h1>
-              <p className="text-xs text-gray-400 leading-tight">Control y Registro de Asistencia</p>
+              <h1 className="font-bold text-gray-900 leading-tight text-base hidden sm:block">Ministerio de Niños</h1>
+              <p className="text-xs text-gray-400 leading-tight hidden sm:block">Control y Registro de Asistencia</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
