@@ -136,7 +136,7 @@ export default function CheckIn({ onCheckedIn }: Props) {
     if (checkedInIds.has(selectedChild.id)) return;
     setCheckingIn(selectedChild.id);
     try {
-      await supabase.from('attendance').insert({
+      const payload: Record<string, unknown> = {
         child_id: selectedChild.id,
         event_date: todayStr(),
         checked_in_at: new Date().toISOString(),
@@ -144,7 +144,20 @@ export default function CheckIn({ onCheckedIn }: Props) {
         physical_condition: physCondition,
         emotional_condition: emotCondition,
         notes: obs,
-      });
+      };
+
+      const { error } = await supabase.from('attendance').insert(payload);
+      if (error) {
+        // Fallback retry if columns are missing on remote Supabase DB
+        delete payload.service_time;
+        const { error: retryErr } = await supabase.from('attendance').insert(payload);
+        if (retryErr) {
+          delete payload.physical_condition;
+          delete payload.emotional_condition;
+          const { error: retryErr2 } = await supabase.from('attendance').insert(payload);
+          if (retryErr2) throw retryErr2;
+        }
+      }
       setJustChecked(selectedChild.id);
       setTimeout(() => setJustChecked(null), 3000);
       await loadTodayAttendance();
@@ -152,7 +165,7 @@ export default function CheckIn({ onCheckedIn }: Props) {
       setSelectedChild(null);
     } catch (err) {
       console.error(err);
-      alert('Error al registrar asistencia.');
+      alert('Error al registrar asistencia. Recuerda ejecutar el script SQL en Supabase.');
     } finally {
       setCheckingIn(null);
     }
