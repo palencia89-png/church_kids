@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import type { Attendance, Child, Category } from './supabase';
+import { getServiceFromRecord } from './supabase';
 import { formatAge, getChildCategory } from './categories';
 
 export type AttendanceRecordForExport = Attendance & {
@@ -25,11 +26,13 @@ export function exportAttendanceToExcel(
     const checkInTime = rec.checked_in_at
       ? new Date(rec.checked_in_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
       : '';
+    const service = getServiceFromRecord(rec);
 
     return {
       'N°': index + 1,
       'Fecha': rec.event_date || '',
       'Hora Ingreso': checkInTime,
+      'Servicio': `Servicio de las ${service}`,
       'Nombre del Niño': child?.full_name || 'Desconocido',
       'Categoría': cat ? `${cat.name} (${cat.min_age}-${cat.max_age} años)` : 'Sin categoría',
       'Edad': child?.birthdate ? formatAge(child.birthdate) : 'No especificada',
@@ -51,6 +54,7 @@ export function exportAttendanceToExcel(
     { wch: 6 },   // N°
     { wch: 12 },  // Fecha
     { wch: 14 },  // Hora Ingreso
+    { wch: 22 },  // Servicio
     { wch: 28 },  // Nombre del Niño
     { wch: 24 },  // Categoría
     { wch: 14 },  // Edad
@@ -66,6 +70,18 @@ export function exportAttendanceToExcel(
 
   // 2. Prepare Sheet 2: Resumen Estadístico
   const total = records.length;
+
+  // Service distribution
+  const serviceStats = {
+    'Servicio 8:00 AM': 0,
+    'Servicio 11:00 AM': 0,
+  };
+
+  records.forEach(rec => {
+    const s = getServiceFromRecord(rec);
+    if (s === '11:00 AM') serviceStats['Servicio 11:00 AM']++;
+    else serviceStats['Servicio 8:00 AM']++;
+  });
 
   // Category distribution
   const categoryCounts: Record<string, number> = {};
@@ -99,6 +115,11 @@ export function exportAttendanceToExcel(
     ['RESUMEN DE ASISTENCIA - MINISTERIO DE NIÑOS'],
     ['Período / Fecha:', dateLabel],
     ['Total de Asistencias:', total],
+    [],
+    ['DESGLOSE POR SERVICIO (HORARIO)'],
+    ['Servicio', 'Cantidad de Niños', 'Porcentaje'],
+    ['Servicio de 8:00 AM', serviceStats['Servicio 8:00 AM'], total > 0 ? `${((serviceStats['Servicio 8:00 AM'] / total) * 100).toFixed(1)}%` : '0%'],
+    ['Servicio de 11:00 AM', serviceStats['Servicio 11:00 AM'], total > 0 ? `${((serviceStats['Servicio 11:00 AM'] / total) * 100).toFixed(1)}%` : '0%'],
     [],
     ['DESGLOSE POR CATEGORÍA'],
     ['Categoría', 'Rango de Edad', 'Cantidad de Niños', 'Porcentaje'],

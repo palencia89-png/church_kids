@@ -1,5 +1,13 @@
 import { useState, useEffect } from 'react';
-import { supabase, type Attendance, type Child, type Category } from '../lib/supabase';
+import {
+  supabase,
+  type Attendance,
+  type Child,
+  type Category,
+  type ServiceTime,
+  SERVICE_TIMES,
+  getServiceFromRecord,
+} from '../lib/supabase';
 import { fetchCategories, getChildCategory, getCategoryBadgeStyle, formatAge } from '../lib/categories';
 import { exportAttendanceToExcel } from '../lib/excelExport';
 import {
@@ -14,6 +22,7 @@ import {
   Download,
   X,
   Sparkles,
+  Clock,
 } from 'lucide-react';
 
 type AttendanceWithChild = Attendance & { child: Child };
@@ -56,6 +65,7 @@ export default function AttendanceHistory() {
   const [records, setRecords] = useState<AttendanceWithChild[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [serviceFilter, setServiceFilter] = useState<'all' | ServiceTime>('all');
   const [loading, setLoading] = useState(false);
   const [dates, setDates] = useState<string[]>([]);
   const [exportModalOpen, setExportModalOpen] = useState(false);
@@ -93,9 +103,15 @@ export default function AttendanceHistory() {
   };
 
   const filteredRecords = records.filter(r => {
-    if (categoryFilter === 'all') return true;
-    const cat = getChildCategory(r.child, categories);
-    return cat?.id === categoryFilter;
+    if (categoryFilter !== 'all') {
+      const cat = getChildCategory(r.child, categories);
+      if (cat?.id !== categoryFilter) return false;
+    }
+    if (serviceFilter !== 'all') {
+      const s = getServiceFromRecord(r);
+      if (s !== serviceFilter) return false;
+    }
+    return true;
   });
 
   const handleExportToday = () => {
@@ -159,6 +175,9 @@ export default function AttendanceHistory() {
     }
   };
 
+  const service8Count = records.filter(r => getServiceFromRecord(r) === '8:00 AM').length;
+  const service11Count = records.filter(r => getServiceFromRecord(r) === '11:00 AM').length;
+
   return (
     <div className="space-y-5">
       {/* Date selector and Controls */}
@@ -170,7 +189,7 @@ export default function AttendanceHistory() {
             </div>
             <div>
               <h2 className="font-bold text-gray-800 text-base">Historial de Asistencia</h2>
-              <p className="text-xs text-gray-500">Consulta y descarga los reportes diarios y por período</p>
+              <p className="text-xs text-gray-500">Consulta y descarga los reportes diarios por servicio y período</p>
             </div>
           </div>
 
@@ -232,19 +251,57 @@ export default function AttendanceHistory() {
 
       {/* Attendance List */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-          <div>
-            <h3 className="font-bold text-gray-800 capitalize text-sm">{formatDate(date)}</h3>
-            {!loading && (
-              <p className="text-xs text-gray-400 mt-0.5">
-                {records.length} niño{records.length !== 1 ? 's' : ''} en total
-              </p>
+        {/* Header & Service + Category Filter Controls */}
+        <div className="space-y-4 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 className="font-bold text-gray-800 capitalize text-sm">{formatDate(date)}</h3>
+              {!loading && (
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {records.length} niño{records.length !== 1 ? 's' : ''} en total · {service8Count} a las 8:00 AM · {service11Count} a las 11:00 AM
+                </p>
+              )}
+            </div>
+
+            {/* Service Filter Tabs */}
+            {records.length > 0 && (
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs">
+                <button
+                  onClick={() => setServiceFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
+                    serviceFilter === 'all'
+                      ? 'bg-white text-gray-800 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  Todos ({records.length})
+                </button>
+                {SERVICE_TIMES.map(st => {
+                  const count = records.filter(r => getServiceFromRecord(r) === st.id).length;
+                  const isSelected = serviceFilter === st.id;
+                  return (
+                    <button
+                      key={st.id}
+                      onClick={() => setServiceFilter(st.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all ${
+                        isSelected
+                          ? `${st.badgeBg} ${st.badgeText} shadow-sm ring-1 ring-inset ${st.badgeBorder}`
+                          : 'text-gray-500 hover:text-gray-800'
+                      }`}
+                    >
+                      <Clock size={12} />
+                      <span>{st.label} ({count})</span>
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
 
           {/* Category Filter */}
           {categories.length > 0 && records.length > 0 && (
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs border-t border-gray-100 pt-3">
+              <span className="text-[11px] font-semibold text-gray-400 mr-1 whitespace-nowrap">Categoría:</span>
               <button
                 onClick={() => setCategoryFilter('all')}
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
@@ -287,7 +344,9 @@ export default function AttendanceHistory() {
           <div className="text-center py-10">
             <Baby size={44} className="text-gray-200 mx-auto mb-2" />
             <p className="text-sm text-gray-400">
-              {records.length === 0 ? 'Sin registros para este día' : 'No hay niños en esta categoría para la fecha seleccionada'}
+              {records.length === 0
+                ? 'Sin registros para este día'
+                : 'No hay niños para los filtros seleccionados'}
             </p>
           </div>
         ) : (
@@ -297,6 +356,8 @@ export default function AttendanceHistory() {
               const emot = getEmotBadge(r.emotional_condition);
               const cat = getChildCategory(r.child, categories);
               const catStyle = cat ? getCategoryBadgeStyle(cat.color) : null;
+              const service = getServiceFromRecord(r);
+              const serviceInfo = SERVICE_TIMES.find(st => st.id === service) || SERVICE_TIMES[0];
 
               return (
                 <div
@@ -315,8 +376,12 @@ export default function AttendanceHistory() {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-bold text-gray-800 text-sm truncate">{r.child?.full_name ?? 'Desconocido'}</p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="font-bold text-gray-800 text-sm truncate mr-1">{r.child?.full_name ?? 'Desconocido'}</p>
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${serviceInfo.badgeBg} ${serviceInfo.badgeText} ${serviceInfo.badgeBorder}`}>
+                          <Clock size={10} />
+                          <span>{service}</span>
+                        </span>
                         {cat && catStyle && (
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${catStyle.bg} ${catStyle.text} ${catStyle.border}`}>
                             <span>{cat.name}</span>
@@ -388,7 +453,7 @@ export default function AttendanceHistory() {
               <div className="bg-emerald-50/40 border border-emerald-100 p-3 rounded-xl flex items-start gap-2 text-xs text-emerald-900">
                 <Sparkles size={16} className="text-emerald-600 mt-0.5 flex-shrink-0" />
                 <span>
-                  El archivo incluirá 2 hojas: <strong>Asistencia Detallada</strong> (con categoría, edad, datos de tutores, condición física/emocional y observaciones) y <strong>Resumen Estadístico</strong>.
+                  El archivo incluirá 2 hojas: <strong>Asistencia Detallada</strong> (con servicio 8:00/11:00 AM, categoría, edad, datos de tutores, condición física/emocional) y <strong>Resumen Estadístico</strong>.
                 </span>
               </div>
 

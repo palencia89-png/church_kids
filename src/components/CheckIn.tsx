@@ -1,7 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, type Child, type Attendance, type Category } from '../lib/supabase';
+import {
+  supabase,
+  type Child,
+  type Attendance,
+  type Category,
+  type ServiceTime,
+  SERVICE_TIMES,
+  getCurrentDefaultService,
+  getServiceFromRecord,
+} from '../lib/supabase';
 import { fetchCategories, getChildCategory, getCategoryBadgeStyle, formatAge } from '../lib/categories';
-import { Search, CheckCircle2, Loader2, UserCheck, Baby, X, FolderKanban } from 'lucide-react';
+import { Search, CheckCircle2, Loader2, UserCheck, Baby, X, FolderKanban, Clock } from 'lucide-react';
 
 type Props = {
   onCheckedIn?: () => void;
@@ -11,27 +20,19 @@ function todayStr() {
   return new Date().toISOString().split('T')[0];
 }
 
-function TodayList({ ids, categories }: { ids: string[]; categories: Category[] }) {
-  const [children, setChildren] = useState<Child[]>([]);
-
-  useEffect(() => {
-    if (ids.length === 0) { setChildren([]); return; }
-    supabase
-      .from('children')
-      .select('*')
-      .in('id', ids)
-      .order('full_name')
-      .then(({ data }) => setChildren((data as Child[]) ?? []));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ids.join(',')]);
-
+function TodayList({ attendanceRecords, categories }: { attendanceRecords: Attendance[]; categories: Category[] }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-      {children.map(c => {
+      {attendanceRecords.map(a => {
+        const c = a.children;
+        if (!c) return null;
         const cat = getChildCategory(c, categories);
         const style = cat ? getCategoryBadgeStyle(cat.color) : null;
+        const service = getServiceFromRecord(a);
+        const sInfo = SERVICE_TIMES.find(st => st.id === service) || SERVICE_TIMES[0];
+
         return (
-          <div key={c.id} className="flex items-center gap-2.5 p-2 rounded-xl bg-gray-50 border border-gray-100">
+          <div key={a.id} className="flex items-center gap-2.5 p-2 rounded-xl bg-gray-50 border border-gray-100">
             <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
               {c.photo_url ? (
                 <img src={c.photo_url} alt={c.full_name} className="w-full h-full object-cover" />
@@ -43,13 +44,18 @@ function TodayList({ ids, categories }: { ids: string[]; categories: Category[] 
             </div>
             <div className="flex-1 min-w-0">
               <span className="text-xs font-semibold text-gray-800 truncate block">{c.full_name}</span>
-              {cat && style ? (
-                <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${style.bg} ${style.text} inline-block`}>
-                  {cat.name}
+              <div className="flex items-center gap-1 flex-wrap mt-0.5">
+                <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${sInfo.badgeBg} ${sInfo.badgeText} ${sInfo.badgeBorder}`}>
+                  {service}
                 </span>
-              ) : (
-                <span className="text-[10px] text-gray-400">{formatAge(c.birthdate)}</span>
-              )}
+                {cat && style ? (
+                  <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${style.bg} ${style.text}`}>
+                    {cat.name}
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-gray-400">{formatAge(c.birthdate)}</span>
+                )}
+              </div>
             </div>
           </div>
         );
@@ -62,6 +68,9 @@ export default function CheckIn({ onCheckedIn }: Props) {
   const [query, setQuery] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCatFilter, setSelectedCatFilter] = useState<string>('all');
+  const [activeService, setActiveService] = useState<ServiceTime>(getCurrentDefaultService());
+  const [todayServiceFilter, setTodayServiceFilter] = useState<'all' | ServiceTime>('all');
+
   const [children, setChildren] = useState<Child[]>([]);
   const [todayAttendance, setTodayAttendance] = useState<Attendance[]>([]);
   const [loading, setLoading] = useState(false);
@@ -77,7 +86,7 @@ export default function CheckIn({ onCheckedIn }: Props) {
   const loadTodayAttendance = useCallback(async () => {
     const { data } = await supabase
       .from('attendance')
-      .select('*')
+      .select('*, children(*)')
       .eq('event_date', todayStr());
     setTodayAttendance((data as Attendance[]) ?? []);
   }, []);
@@ -116,6 +125,12 @@ export default function CheckIn({ onCheckedIn }: Props) {
     return cat?.id === selectedCatFilter;
   });
 
+  // Filter today's attendance by service
+  const filteredTodayAttendance = todayAttendance.filter(a => {
+    if (todayServiceFilter === 'all') return true;
+    return getServiceFromRecord(a) === todayServiceFilter;
+  });
+
   const confirmCheckIn = async () => {
     if (!selectedChild) return;
     if (checkedInIds.has(selectedChild.id)) return;
@@ -125,6 +140,7 @@ export default function CheckIn({ onCheckedIn }: Props) {
         child_id: selectedChild.id,
         event_date: todayStr(),
         checked_in_at: new Date().toISOString(),
+        service_time: activeService,
         physical_condition: physCondition,
         emotional_condition: emotCondition,
         notes: obs,
@@ -147,14 +163,48 @@ export default function CheckIn({ onCheckedIn }: Props) {
 
   return (
     <div className="space-y-6">
+      {/* Service Selector & CheckIn Header */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        {/* Service Time Switcher */}
+        <div className="mb-5 p-3 bg-slate-50 border border-slate-100 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Clock size={18} className="text-sky-600" />
+            <div>
+              <p className="text-xs font-bold text-gray-800">Servicio para Registro</p>
+              <p className="text-[11px] text-gray-500">Selecciona el horario del servicio actual</p>
+            </div>
+          </div>
+          <div className="flex bg-white p-1 rounded-lg border border-gray-200 gap-1">
+            {SERVICE_TIMES.map(st => {
+              const isActive = activeService === st.id;
+              return (
+                <button
+                  key={st.id}
+                  type="button"
+                  onClick={() => setActiveService(st.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                    isActive
+                      ? `${st.badgeBg} ${st.badgeText} ring-1 ring-inset ${st.badgeBorder} shadow-sm`
+                      : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  <Clock size={12} />
+                  <span>{st.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="flex items-center gap-3 mb-4">
           <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center">
             <UserCheck size={18} className="text-emerald-600" />
           </div>
           <div>
             <h2 className="font-semibold text-gray-800">Registrar Asistencia</h2>
-            <p className="text-xs text-gray-500">Busca al niño por nombre y registra su ingreso con su categoría</p>
+            <p className="text-xs text-gray-500">
+              Registrando para el <strong className="text-emerald-700">Servicio de las {activeService}</strong>
+            </p>
           </div>
         </div>
 
@@ -286,23 +336,61 @@ export default function CheckIn({ onCheckedIn }: Props) {
         {justChecked && (
           <div className="mt-4 flex items-center gap-2 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-sm font-medium animate-fadeIn">
             <CheckCircle2 size={18} />
-            Asistencia registrada exitosamente
+            Asistencia registrada exitosamente para el Servicio de las {activeService}
           </div>
         )}
       </div>
 
-      {/* Today's Attendance List */}
+      {/* Today's Attendance List with Service Filter */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-gray-800">Asistencia de hoy</h3>
-          <span className="text-xs bg-emerald-100 text-emerald-700 font-semibold px-2.5 py-1 rounded-full">
-            {todayAttendance.length} niño{todayAttendance.length !== 1 ? 's' : ''}
-          </span>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-gray-800">Asistencia de hoy</h3>
+            <span className="text-xs bg-emerald-100 text-emerald-700 font-semibold px-2.5 py-0.5 rounded-full">
+              {filteredTodayAttendance.length} niño{filteredTodayAttendance.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+
+          {/* Service filter for today */}
+          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl text-xs">
+            <button
+              onClick={() => setTodayServiceFilter('all')}
+              className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                todayServiceFilter === 'all'
+                  ? 'bg-white text-gray-800 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              Todos ({todayAttendance.length})
+            </button>
+            {SERVICE_TIMES.map(st => {
+              const count = todayAttendance.filter(a => getServiceFromRecord(a) === st.id).length;
+              const isSelected = todayServiceFilter === st.id;
+              return (
+                <button
+                  key={st.id}
+                  onClick={() => setTodayServiceFilter(st.id)}
+                  className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                    isSelected
+                      ? 'bg-white text-gray-800 shadow-sm font-bold'
+                      : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  {st.id} ({count})
+                </button>
+              );
+            })}
+          </div>
         </div>
-        {todayAttendance.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-4">Aún no hay registros hoy</p>
+
+        {filteredTodayAttendance.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-4">
+            {todayAttendance.length === 0
+              ? 'Aún no hay registros hoy'
+              : `No hay niños registrados en el Servicio de las ${todayServiceFilter}`}
+          </p>
         ) : (
-          <TodayList ids={Array.from(checkedInIds)} categories={categories} />
+          <TodayList attendanceRecords={filteredTodayAttendance} categories={categories} />
         )}
       </div>
 
@@ -316,7 +404,10 @@ export default function CheckIn({ onCheckedIn }: Props) {
                 <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
                   <UserCheck className="text-emerald-600" size={16} />
                 </div>
-                <h3 className="font-bold text-gray-800 text-sm">Condiciones de Ingreso</h3>
+                <div>
+                  <h3 className="font-bold text-gray-800 text-sm">Condiciones de Ingreso</h3>
+                  <p className="text-[10px] text-emerald-700 font-medium">Servicio de las {activeService}</p>
+                </div>
               </div>
               <button
                 onClick={() => setSelectedChild(null)}

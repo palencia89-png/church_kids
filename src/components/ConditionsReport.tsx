@@ -1,5 +1,13 @@
 import { useState, useEffect } from 'react';
-import { supabase, type Attendance, type Child, type Category } from '../lib/supabase';
+import {
+  supabase,
+  type Attendance,
+  type Child,
+  type Category,
+  type ServiceTime,
+  SERVICE_TIMES,
+  getServiceFromRecord,
+} from '../lib/supabase';
 import { fetchCategories, getChildCategory, getCategoryBadgeStyle, formatAge } from '../lib/categories';
 import { exportAttendanceToExcel } from '../lib/excelExport';
 import {
@@ -65,6 +73,7 @@ function getEmotBadge(cond?: string) {
 
 export default function ConditionsReport() {
   const [filter, setFilter] = useState<DateFilter>('today');
+  const [serviceFilter, setServiceFilter] = useState<'all' | ServiceTime>('all');
   const [records, setRecords] = useState<AttendanceWithChild[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,11 +114,21 @@ export default function ConditionsReport() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
 
-  // Compute stats
-  const totalCheckIns = records.length;
+  // Total un-filtered counts for service breakdown KPI
+  const rawTotalCheckIns = records.length;
+  const rawService8Count = records.filter(r => getServiceFromRecord(r) === '8:00 AM').length;
+  const rawService11Count = records.filter(r => getServiceFromRecord(r) === '11:00 AM').length;
+
+  // Filter records by selected service
+  const displayedRecords = records.filter(r => {
+    if (serviceFilter === 'all') return true;
+    return getServiceFromRecord(r) === serviceFilter;
+  });
+
+  const totalCheckIns = displayedRecords.length;
 
   // Alerts: sick, crying, injured, or has manual notes
-  const alertRecords = records.filter(r => {
+  const alertRecords = displayedRecords.filter(r => {
     const isSick = r.physical_condition === 'Enfermo';
     const isInjured = r.physical_condition === 'Lesión';
     const isCrying = r.emotional_condition === 'Llorando';
@@ -132,7 +151,7 @@ export default function ConditionsReport() {
   });
   let unassignedCatCount = 0;
 
-  records.forEach(r => {
+  displayedRecords.forEach(r => {
     const pc = (r.physical_condition || 'Sano') as keyof typeof physStats;
     if (physStats[pc] !== undefined) physStats[pc]++;
     else physStats.Sano++;
@@ -150,14 +169,14 @@ export default function ConditionsReport() {
   });
 
   const handleExportExcel = () => {
-    if (records.length === 0) {
-      alert('No hay registros para exportar en este período.');
+    if (displayedRecords.length === 0) {
+      alert('No hay registros para exportar con los filtros seleccionados.');
       return;
     }
     setExporting(true);
     try {
-      const filterLabel = filter === 'today' ? `Hoy_${todayStr()}` : filter === 'week' ? 'Ultimos_7_Dias' : filter === 'month' ? 'Mes_Actual' : 'Historico_Completo';
-      exportAttendanceToExcel(records, categories, {
+      const filterLabel = `${filter === 'today' ? `Hoy_${todayStr()}` : filter === 'week' ? 'Ultimos_7_Dias' : filter === 'month' ? 'Mes_Actual' : 'Historico'}_Servicio_${serviceFilter.replace(/[^a-zA-Z0-9]/g, '')}`;
+      exportAttendanceToExcel(displayedRecords, categories, {
         dateLabel: filterLabel,
         filenamePrefix: 'Reporte_Condiciones_Asistencia',
       });
@@ -172,48 +191,87 @@ export default function ConditionsReport() {
   return (
     <div className="space-y-6">
       {/* Top Filter and Header */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center shadow-sm">
-            <BarChart3 size={20} className="text-violet-600" />
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center shadow-sm">
+              <BarChart3 size={20} className="text-violet-600" />
+            </div>
+            <div>
+              <h2 className="font-bold text-gray-900 text-base">Informe de Condiciones</h2>
+              <p className="text-xs text-gray-500">Salud, emociones, categorías, servicios y alertas de ingreso</p>
+            </div>
           </div>
-          <div>
-            <h2 className="font-bold text-gray-900 text-base">Informe de Condiciones</h2>
-            <p className="text-xs text-gray-500">Salud, emociones, categorías y alertas de ingreso</p>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex bg-gray-100 p-1 rounded-xl gap-1">
+              {[
+                { id: 'today', label: 'Hoy' },
+                { id: 'week', label: '7 días' },
+                { id: 'month', label: 'Mes' },
+                { id: 'all', label: 'Todos' },
+              ].map(opt => (
+                <button
+                  key={opt.id}
+                  onClick={() => setFilter(opt.id as DateFilter)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    filter === opt.id
+                      ? 'bg-white text-gray-800 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={handleExportExcel}
+              disabled={exporting || displayedRecords.length === 0}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-all disabled:opacity-50"
+              title="Exportar registros filtrados a Excel"
+            >
+              {exporting ? <Loader2 size={15} className="animate-spin" /> : <FileSpreadsheet size={15} />}
+              <span>Exportar Excel</span>
+            </button>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex bg-gray-100 p-1 rounded-xl gap-1">
-            {[
-              { id: 'today', label: 'Hoy' },
-              { id: 'week', label: '7 días' },
-              { id: 'month', label: 'Mes' },
-              { id: 'all', label: 'Todos' },
-            ].map(opt => (
-              <button
-                key={opt.id}
-                onClick={() => setFilter(opt.id as DateFilter)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  filter === opt.id
-                    ? 'bg-white text-gray-800 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-900'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+        {/* Service Filter Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-t border-gray-100 pt-3 gap-2">
+          <div className="flex items-center gap-2">
+            <Clock size={15} className="text-indigo-600" />
+            <span className="text-xs font-bold text-gray-700">Filtrar por Servicio:</span>
           </div>
-
-          <button
-            onClick={handleExportExcel}
-            disabled={exporting || records.length === 0}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-all disabled:opacity-50"
-            title="Exportar registros filtrados a Excel"
-          >
-            {exporting ? <Loader2 size={15} className="animate-spin" /> : <FileSpreadsheet size={15} />}
-            <span>Exportar Excel</span>
-          </button>
+          <div className="flex bg-slate-100 p-1 rounded-xl gap-1 text-xs">
+            <button
+              onClick={() => setServiceFilter('all')}
+              className={`px-3 py-1 rounded-lg font-bold transition-all ${
+                serviceFilter === 'all'
+                  ? 'bg-white text-gray-800 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              Todos los Servicios ({rawTotalCheckIns})
+            </button>
+            {SERVICE_TIMES.map(st => {
+              const count = st.id === '8:00 AM' ? rawService8Count : rawService11Count;
+              const isSelected = serviceFilter === st.id;
+              return (
+                <button
+                  key={st.id}
+                  onClick={() => setServiceFilter(st.id)}
+                  className={`flex items-center gap-1 px-3 py-1 rounded-lg font-bold transition-all ${
+                    isSelected
+                      ? `${st.badgeBg} ${st.badgeText} shadow-sm ring-1 ring-inset ${st.badgeBorder}`
+                      : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  <span>{st.label} ({count})</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -233,7 +291,9 @@ export default function ConditionsReport() {
                   <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Ingresos</span>
                 </div>
                 <p className="text-3xl font-black text-gray-800 leading-none">{totalCheckIns}</p>
-                <p className="text-[10px] text-gray-400 mt-2">Niños registrados en total</p>
+                <p className="text-[10px] text-gray-400 mt-2">
+                  {serviceFilter === 'all' ? 'Niños en total' : `Servicio de las ${serviceFilter}`}
+                </p>
               </div>
 
               <div className={`bg-white rounded-2xl border p-5 shadow-sm transition-all ${alertRecords.length > 0 ? 'border-amber-100 bg-amber-50/10' : 'border-gray-100'}`}>
@@ -245,6 +305,39 @@ export default function ConditionsReport() {
                 <p className="text-[10px] text-gray-400 mt-2">
                   {alertRecords.length > 0 ? 'Requieren seguimiento' : 'Sin alertas registradas'}
                 </p>
+              </div>
+            </div>
+
+            {/* Service Breakdown card */}
+            <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-4">
+              <div className="flex items-center gap-2 border-b border-gray-50 pb-3">
+                <Clock size={16} className="text-indigo-600" />
+                <h3 className="font-bold text-gray-800 text-xs uppercase tracking-wider">Asistencia por Horario de Servicio</h3>
+              </div>
+              <div className="space-y-3.5">
+                {SERVICE_TIMES.map(st => {
+                  const count = st.id === '8:00 AM' ? rawService8Count : rawService11Count;
+                  const percent = rawTotalCheckIns > 0 ? Math.round((count / rawTotalCheckIns) * 100) : 0;
+                  const barBg = st.id === '8:00 AM' ? 'bg-indigo-500' : 'bg-purple-500';
+
+                  return (
+                    <div key={st.id} className="space-y-1">
+                      <div className="flex justify-between text-xs font-semibold text-gray-700">
+                        <span className="flex items-center gap-1.5">
+                          <span className={`w-2.5 h-2.5 rounded-full ${barBg}`} />
+                          <span>{st.label}</span>
+                        </span>
+                        <span className="text-gray-500">{count} niños ({percent}%)</span>
+                      </div>
+                      <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${barBg}`}
+                          style={{ width: `${percent}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -406,6 +499,8 @@ export default function ConditionsReport() {
                     const emot = getEmotBadge(rec.emotional_condition);
                     const cat = getChildCategory(rec.child, categories);
                     const catStyle = cat ? getCategoryBadgeStyle(cat.color) : null;
+                    const service = getServiceFromRecord(rec);
+                    const sInfo = SERVICE_TIMES.find(st => st.id === service) || SERVICE_TIMES[0];
 
                     return (
                       <div
@@ -424,8 +519,11 @@ export default function ConditionsReport() {
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-bold text-gray-800 text-xs truncate">{rec.child?.full_name ?? 'Desconocido'}</h4>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <h4 className="font-bold text-gray-800 text-xs truncate mr-1">{rec.child?.full_name ?? 'Desconocido'}</h4>
+                              <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold border ${sInfo.badgeBg} ${sInfo.badgeText} ${sInfo.badgeBorder}`}>
+                                {service}
+                              </span>
                               {cat && catStyle && (
                                 <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold border ${catStyle.bg} ${catStyle.text} ${catStyle.border}`}>
                                   {cat.name}
