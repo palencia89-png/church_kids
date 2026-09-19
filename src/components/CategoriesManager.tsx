@@ -7,7 +7,7 @@ import {
   autoAssignCategories,
   getCategoryBadgeStyle,
   CATEGORY_COLORS,
-  calculateAge,
+  getChildCategory,
 } from '../lib/categories';
 import {
   FolderKanban,
@@ -149,14 +149,7 @@ export default function CategoriesManager() {
 
   // Count kids per category
   const getKidsCountForCategory = (cat: Category) => {
-    return children.filter(child => {
-      if (child.category_id === cat.id) return true;
-      if (!child.category_id) {
-        const age = calculateAge(child.birthdate);
-        return age !== null && age >= cat.min_age && age <= cat.max_age;
-      }
-      return false;
-    }).length;
+    return children.filter(child => getChildCategory(child, categories)?.id === cat.id).length;
   };
 
   return (

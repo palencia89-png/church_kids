@@ -64,20 +64,44 @@ export function formatAge(birthdate: string | null): string {
 }
 
 export function findCategoryForAge(age: number | null, categories: Category[]): Category | undefined {
-  if (age === null) return undefined;
-  return categories.find(c => age >= c.min_age && age <= c.max_age);
+  if (age === null || !categories || categories.length === 0) return undefined;
+  
+  // Sort categories by min_age ascending
+  const sorted = [...categories].sort((a, b) => a.min_age - b.min_age);
+
+  // Exact range match first
+  const exact = sorted.find(c => age >= c.min_age && age <= c.max_age);
+  if (exact) return exact;
+
+  // If younger than the lowest min_age (e.g. toddlers/babies ages 0, 1, 2), match lowest category
+  if (age < sorted[0].min_age) {
+    return sorted[0];
+  }
+
+  // If older than the highest max_age (e.g. teens 14+), match highest category
+  if (age > sorted[sorted.length - 1].max_age) {
+    return sorted[sorted.length - 1];
+  }
+
+  return undefined;
 }
 
 export function getChildCategory(child: Child | null | undefined, categories: Category[]): Category | undefined {
-  if (!child) return undefined;
+  if (!child || !categories || categories.length === 0) return undefined;
+
+  // 1. If child has a birthdate, prioritize their actual age for categorization
+  const age = calculateAge(child.birthdate);
+  if (age !== null) {
+    const matchedByAge = findCategoryForAge(age, categories);
+    if (matchedByAge) return matchedByAge;
+  }
+
+  // 2. If no birthdate is recorded, use explicitly assigned category_id
   if (child.category_id) {
     const matched = categories.find(c => c.id === child.category_id);
     if (matched) return matched;
   }
-  const age = calculateAge(child.birthdate);
-  if (age !== null) {
-    return findCategoryForAge(age, categories);
-  }
+
   return undefined;
 }
 
@@ -199,23 +223,36 @@ async function refreshLocalCache() {
 }
 
 export async function autoAssignCategories(children: Child[], categories: Category[]): Promise<number> {
-  let updatedCount = 0;
+  const toUpdate: Array<{ id: string; category_id: string }> = [];
+
   for (const child of children) {
     const age = calculateAge(child.birthdate);
     if (age !== null) {
       const cat = findCategoryForAge(age, categories);
       if (cat && cat.id !== child.category_id) {
-        try {
-          await supabase
-            .from('children')
-            .update({ category_id: cat.id })
-            .eq('id', child.id);
-          updatedCount++;
-        } catch (err) {
-          console.error(`Error auto-assigning category to child ${child.id}:`, err);
-        }
+        toUpdate.push({ id: child.id, category_id: cat.id });
       }
     }
   }
+
+  let updatedCount = 0;
+  const CHUNK_SIZE = 15;
+  for (let i = 0; i < toUpdate.length; i += CHUNK_SIZE) {
+    const chunk = toUpdate.slice(i, i + CHUNK_SIZE);
+    await Promise.all(
+      chunk.map(async item => {
+        try {
+          const { error } = await supabase
+            .from('children')
+            .update({ category_id: item.category_id })
+            .eq('id', item.id);
+          if (!error) updatedCount++;
+        } catch (err) {
+          console.error(`Error auto-assigning category to child ${item.id}:`, err);
+        }
+      })
+    );
+  }
+
   return updatedCount;
 }

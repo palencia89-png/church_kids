@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase, type Child, type Category } from '../lib/supabase';
-import { fetchCategories, getChildCategory, getCategoryBadgeStyle, formatAge } from '../lib/categories';
-import { Search, UserPlus, Pencil, Trash2, Baby, Phone, Users, Loader2, FolderKanban } from 'lucide-react';
+import { fetchCategories, getChildCategory, getCategoryBadgeStyle, formatAge, autoAssignCategories } from '../lib/categories';
+import { Search, UserPlus, Pencil, Trash2, Baby, Phone, Users, Loader2, FolderKanban, FileSpreadsheet, Sparkles, RefreshCw, CheckCircle2 } from 'lucide-react';
+import ImportChildrenModal from './ImportChildrenModal';
 
 type Props = {
   onRegister: () => void;
@@ -16,6 +17,9 @@ export default function ChildrenList({ onRegister, onEdit, refreshKey }: Props) 
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -47,6 +51,28 @@ export default function ChildrenList({ onRegister, onEdit, refreshKey }: Props) 
     setDeleting(null);
   };
 
+  const outOfSyncChildren = children.filter(c => {
+    const computed = getChildCategory(c, categories);
+    return computed && c.category_id !== computed.id;
+  });
+
+  const handleSyncCategories = async () => {
+    setSyncing(true);
+    try {
+      const updated = await autoAssignCategories(children, categories);
+      const [{ data: kids }] = await Promise.all([
+        supabase.from('children').select('*').order('full_name'),
+      ]);
+      setChildren((kids as Child[]) ?? []);
+      setSyncNotice(`¡Se actualizaron ${updated} niños en la base de datos de acuerdo a su edad real!`);
+      setTimeout(() => setSyncNotice(null), 5000);
+    } catch (e) {
+      console.error('Error al sincronizar categorías:', e);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
       {/* Top search and filter bar */}
@@ -63,6 +89,14 @@ export default function ChildrenList({ onRegister, onEdit, refreshKey }: Props) 
             />
           </div>
           <button
+            onClick={() => setShowImportModal(true)}
+            className="flex items-center gap-2 px-3.5 py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 rounded-xl text-sm font-medium transition-colors shadow-sm whitespace-nowrap"
+            title="Importar niños desde Excel"
+          >
+            <FileSpreadsheet size={16} />
+            Importar Excel
+          </button>
+          <button
             onClick={onRegister}
             className="flex items-center gap-2 px-4 py-2.5 bg-sky-500 text-white rounded-xl text-sm font-medium hover:bg-sky-600 transition-colors shadow-sm whitespace-nowrap"
           >
@@ -70,6 +104,39 @@ export default function ChildrenList({ onRegister, onEdit, refreshKey }: Props) 
             Nuevo niño
           </button>
         </div>
+
+        {/* Sync notice toast / banner */}
+        {syncNotice && (
+          <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2.5 text-emerald-800 text-xs font-semibold animate-in fade-in">
+            <CheckCircle2 size={16} className="text-emerald-600 flex-shrink-0" />
+            <span>{syncNotice}</span>
+          </div>
+        )}
+
+        {/* Out-of-sync alert banner */}
+        {outOfSyncChildren.length > 0 && !syncNotice && (
+          <div className="bg-amber-50/90 border border-amber-200 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-900 shadow-sm animate-in fade-in">
+            <div className="flex items-center gap-2.5">
+              <Sparkles className="text-amber-600 flex-shrink-0" size={18} />
+              <div>
+                <p className="text-xs font-bold text-amber-900">
+                  {outOfSyncChildren.length} niño{outOfSyncChildren.length !== 1 ? 's' : ''} con categoría desactualizada en la base de datos
+                </p>
+                <p className="text-[11px] text-amber-700">
+                  En pantalla ya se muestran clasificados según su edad real. Puedes guardar la corrección directamente en la base de datos:
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleSyncCategories}
+              disabled={syncing}
+              className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 shadow-sm whitespace-nowrap self-end sm:self-center disabled:opacity-50"
+            >
+              {syncing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+              {syncing ? 'Guardando...' : 'Ajustar en Base de Datos'}
+            </button>
+          </div>
+        )}
 
         {/* Category Pills Filter */}
         {categories.length > 0 && (
@@ -242,6 +309,24 @@ export default function ChildrenList({ onRegister, onEdit, refreshKey }: Props) 
         <p className="text-center text-xs text-gray-400">
           {filtered.length} niño{filtered.length !== 1 ? 's' : ''} mostrado{filtered.length !== 1 ? 's' : ''} de {children.length}
         </p>
+      )}
+
+      {showImportModal && (
+        <ImportChildrenModal
+          onClose={() => setShowImportModal(false)}
+          onSuccess={() => {
+            setShowImportModal(false);
+            setLoading(true);
+            Promise.all([
+              supabase.from('children').select('*').order('full_name'),
+              fetchCategories(),
+            ]).then(([{ data: kids }, cats]) => {
+              setChildren((kids as Child[]) ?? []);
+              setCategories(cats);
+              setLoading(false);
+            });
+          }}
+        />
       )}
     </div>
   );

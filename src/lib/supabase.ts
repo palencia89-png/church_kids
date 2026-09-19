@@ -30,14 +30,32 @@ export type Child = {
   created_at: string;
 };
 
+export type ChurchEvent = {
+  id: string;
+  title: string;
+  description?: string;
+  event_date: string;
+  start_time?: string;
+  end_time?: string;
+  location?: string;
+  category_id?: string | null;
+  status: 'upcoming' | 'in_progress' | 'completed' | 'cancelled';
+  color?: string;
+  created_at?: string;
+  category?: Category | null;
+};
+
 export type Attendance = {
   id: string;
   child_id: string;
   checked_in_at: string;
   event_date: string;
+  event_id?: string | null;
+  service_time?: string;
   physical_condition?: string;
   emotional_condition?: string;
   notes: string;
   created_at: string;
   children?: Child;
+  event?: ChurchEvent | null;
 };

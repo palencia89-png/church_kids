@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, type Child, type Attendance, type Category } from '../lib/supabase';
+import { supabase, type Child, type Attendance, type Category, type ChurchEvent } from '../lib/supabase';
 import { fetchCategories, getChildCategory, getCategoryBadgeStyle, formatAge } from '../lib/categories';
-import { Search, CheckCircle2, Loader2, UserCheck, Baby, X, FolderKanban } from 'lucide-react';
+import { fetchEvents } from '../lib/events';
+import { Search, CheckCircle2, Loader2, UserCheck, Baby, X, FolderKanban, Calendar } from 'lucide-react';
 
 type Props = {
   onCheckedIn?: () => void;
+  onGoToEventAttendance?: (event: ChurchEvent) => void;
 };
 
 function todayStr() {
@@ -58,12 +60,13 @@ function TodayList({ ids, categories }: { ids: string[]; categories: Category[] 
   );
 }
 
-export default function CheckIn({ onCheckedIn }: Props) {
+export default function CheckIn({ onCheckedIn, onGoToEventAttendance }: Props) {
   const [query, setQuery] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCatFilter, setSelectedCatFilter] = useState<string>('all');
   const [children, setChildren] = useState<Child[]>([]);
   const [todayAttendance, setTodayAttendance] = useState<Attendance[]>([]);
+  const [todayEvents, setTodayEvents] = useState<ChurchEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [checkingIn, setCheckingIn] = useState<string | null>(null);
   const [justChecked, setJustChecked] = useState<string | null>(null);
@@ -85,6 +88,11 @@ export default function CheckIn({ onCheckedIn }: Props) {
   useEffect(() => {
     loadTodayAttendance();
     fetchCategories().then(setCategories);
+    fetchEvents().then(res => {
+      const today = todayStr();
+      const current = res.events.filter(e => e.event_date === today || e.status === 'in_progress');
+      setTodayEvents(current);
+    });
   }, [loadTodayAttendance]);
 
   useEffect(() => {
@@ -121,14 +129,19 @@ export default function CheckIn({ onCheckedIn }: Props) {
     if (checkedInIds.has(selectedChild.id)) return;
     setCheckingIn(selectedChild.id);
     try {
-      await supabase.from('attendance').insert({
+      const activeEv = todayEvents.length > 0 ? todayEvents[0] : null;
+      const insertData: Record<string, unknown> = {
         child_id: selectedChild.id,
         event_date: todayStr(),
         checked_in_at: new Date().toISOString(),
         physical_condition: physCondition,
         emotional_condition: emotCondition,
         notes: obs,
-      });
+      };
+      if (activeEv) {
+        insertData.event_id = activeEv.id;
+      }
+      await supabase.from('attendance').insert(insertData);
       setJustChecked(selectedChild.id);
       setTimeout(() => setJustChecked(null), 3000);
       await loadTodayAttendance();
@@ -147,6 +160,31 @@ export default function CheckIn({ onCheckedIn }: Props) {
 
   return (
     <div className="space-y-6">
+      {/* Banner de Evento Activo Hoy */}
+      {todayEvents.length > 0 && onGoToEventAttendance && (
+        <div className="bg-gradient-to-r from-sky-50 to-indigo-50 border border-sky-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-sky-500 text-white flex items-center justify-center flex-shrink-0 shadow-md shadow-sky-500/20">
+              <Calendar size={20} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-sky-950">
+                Evento activo hoy: <span className="text-sky-700 font-extrabold">{todayEvents[0].title}</span>
+              </p>
+              <p className="text-[11px] text-sky-600">
+                ¿Deseas tomar la asistencia directamente en este evento con métricas y reportes?
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => onGoToEventAttendance(todayEvents[0])}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all whitespace-nowrap self-start sm:self-auto"
+          >
+            <UserCheck size={15} />
+            <span>Ir a Asistencia del Evento</span>
+          </button>
+        </div>
+      )}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center">
