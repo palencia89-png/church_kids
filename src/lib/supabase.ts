@@ -59,3 +59,25 @@ export type Attendance = {
   children?: Child;
   event?: ChurchEvent | null;
 };
+
+export const SERVICE_HOURS = [
+  { id: '8:00 AM', label: '8:00 AM - 10:00 AM', shortLabel: '8 a 10', badgeColor: 'sky' },
+  { id: '11:00 AM', label: '11:00 AM - 1:00 PM', shortLabel: '11 a 1', badgeColor: 'amber' },
+] as const;
+
+export type ServiceTimeId = typeof SERVICE_HOURS[number]['id'];
+
+export function getCurrentServiceTime(): ServiceTimeId {
+  const now = new Date();
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  const totalMinutes = hours * 60 + minutes;
+  // If before 10:30 AM (630 min), default to 8:00 AM service. Otherwise 11:00 AM service.
+  return totalMinutes < 630 ? '8:00 AM' : '11:00 AM';
+}
+
+export function formatServiceTimeLabel(serviceTime?: string | null): string {
+  if (!serviceTime) return '8:00 AM - 10:00 AM';
+  const found = SERVICE_HOURS.find(h => h.id === serviceTime);
+  return found ? found.label : serviceTime;
+}

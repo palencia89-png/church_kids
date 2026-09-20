@@ -1,4 +1,5 @@
-import { supabase, type ChurchEvent, type Attendance, type Child } from './supabase';
+import { supabase, type ChurchEvent, type Attendance, type Child, type Category, getCurrentServiceTime } from './supabase';
+import { getChildCategory } from './categories';
 
 export const EVENT_COLORS: Record<
   string,
@@ -400,12 +401,14 @@ export async function checkInChildToEvent(params: {
   const isAvailable = await checkEventsTableAvailable();
 
   const now = new Date().toISOString();
+  const serviceTime = getCurrentServiceTime();
   const record: Attendance = {
     id: crypto.randomUUID(),
     child_id: childId,
     event_id: eventId,
     event_date: eventDate,
     checked_in_at: now,
+    service_time: serviceTime,
     physical_condition: physicalCondition,
     emotional_condition: emotionalCondition,
     notes,
@@ -432,6 +435,7 @@ export async function checkInChildToEvent(params: {
         event_id: eventId,
         event_date: eventDate,
         checked_in_at: now,
+        service_time: serviceTime,
         physical_condition: physicalCondition,
         emotional_condition: emotionalCondition,
         notes,
@@ -448,6 +452,7 @@ export async function checkInChildToEvent(params: {
             child_id: childId,
             event_date: eventDate,
             checked_in_at: now,
+            service_time: serviceTime,
             physical_condition: physicalCondition,
             emotional_condition: emotionalCondition,
             notes,

@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, type Child, type Attendance, type Category, type ChurchEvent } from '../lib/supabase';
+import { supabase, type Child, type Attendance, type Category, type ChurchEvent, SERVICE_HOURS, getCurrentServiceTime, type ServiceTimeId } from '../lib/supabase';
 import { fetchCategories, getChildCategory, getCategoryBadgeStyle, formatAge } from '../lib/categories';
 import { fetchEvents } from '../lib/events';
-import { Search, CheckCircle2, Loader2, UserCheck, Baby, X, FolderKanban, Calendar } from 'lucide-react';
+import { Search, CheckCircle2, Loader2, UserCheck, Baby, X, FolderKanban, Calendar, Clock } from 'lucide-react';
 
 type Props = {
   onCheckedIn?: () => void;
@@ -70,6 +70,7 @@ export default function CheckIn({ onCheckedIn, onGoToEventAttendance }: Props) {
   const [loading, setLoading] = useState(false);
   const [checkingIn, setCheckingIn] = useState<string | null>(null);
   const [justChecked, setJustChecked] = useState<string | null>(null);
+  const [selectedServiceTime, setSelectedServiceTime] = useState<ServiceTimeId>(getCurrentServiceTime());
 
   // Modal states
   const [selectedChild, setSelectedChild] = useState<Child | null>(null);
@@ -115,7 +116,8 @@ export default function CheckIn({ onCheckedIn, onGoToEventAttendance }: Props) {
     return () => clearTimeout(timeout);
   }, [query]);
 
-  const checkedInIds = new Set(todayAttendance.map(a => a.child_id));
+  const currentServiceAttendance = todayAttendance.filter(a => (a.service_time || '8:00 AM') === selectedServiceTime);
+  const checkedInIds = new Set(currentServiceAttendance.map(a => a.child_id));
 
   // Filter children list by category if category filter is selected
   const displayedChildren = children.filter(c => {
@@ -134,6 +136,7 @@ export default function CheckIn({ onCheckedIn, onGoToEventAttendance }: Props) {
         child_id: selectedChild.id,
         event_date: todayStr(),
         checked_in_at: new Date().toISOString(),
+        service_time: selectedServiceTime,
         physical_condition: physCondition,
         emotional_condition: emotCondition,
         notes: obs,
@@ -193,6 +196,41 @@ export default function CheckIn({ onCheckedIn, onGoToEventAttendance }: Props) {
           <div>
             <h2 className="font-semibold text-gray-800">Registrar Asistencia</h2>
             <p className="text-xs text-gray-500">Busca al niño por nombre y registra su ingreso con su categoría</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 p-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center text-sky-700 flex-shrink-0">
+              <Clock size={16} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-gray-800">Horario de Culto Activo</p>
+              <p className="text-[11px] text-gray-500">Asistencia para este turno</p>
+            </div>
+          </div>
+          <div className="flex bg-white p-1 rounded-xl border border-gray-200 shadow-sm gap-1">
+            {SERVICE_HOURS.map(h => {
+              const isSelected = selectedServiceTime === h.id;
+              const count = todayAttendance.filter(a => (a.service_time || '8:00 AM') === h.id).length;
+              return (
+                <button
+                  key={h.id}
+                  type="button"
+                  onClick={() => setSelectedServiceTime(h.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    isSelected
+                      ? 'bg-sky-600 text-white shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <span>{h.label}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${isSelected ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -331,14 +369,36 @@ export default function CheckIn({ onCheckedIn, onGoToEventAttendance }: Props) {
 
       {/* Today's Attendance List */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-gray-800">Asistencia de hoy</h3>
-          <span className="text-xs bg-emerald-100 text-emerald-700 font-semibold px-2.5 py-1 rounded-full">
-            {todayAttendance.length} niño{todayAttendance.length !== 1 ? 's' : ''}
-          </span>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div>
+            <h3 className="font-semibold text-gray-800">
+              Asistencia de hoy · {selectedServiceTime === '8:00 AM' ? 'Culto 8:00 AM - 10:00 AM' : 'Culto 11:00 AM - 1:00 PM'}
+            </h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              <strong className="text-emerald-600 font-bold">{currentServiceAttendance.length}</strong> niño{currentServiceAttendance.length !== 1 ? 's' : ''} en este culto · <span className="text-gray-500">{todayAttendance.length} en total hoy</span>
+            </p>
+          </div>
+          <div className="flex bg-gray-100 p-1 rounded-xl gap-1">
+            {SERVICE_HOURS.map(h => {
+              const count = todayAttendance.filter(a => (a.service_time || '8:00 AM') === h.id).length;
+              return (
+                <button
+                  key={h.id}
+                  onClick={() => setSelectedServiceTime(h.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    selectedServiceTime === h.id
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  {h.shortLabel} ({count})
+                </button>
+              );
+            })}
+          </div>
         </div>
-        {todayAttendance.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-4">Aún no hay registros hoy</p>
+        {currentServiceAttendance.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-4">Aún no hay registros en este horario hoy</p>
         ) : (
           <TodayList ids={Array.from(checkedInIds)} categories={categories} />
         )}

@@ -25,10 +25,12 @@ export function exportAttendanceToExcel(
     const checkInTime = rec.checked_in_at
       ? new Date(rec.checked_in_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
       : '';
+    const serviceLabel = rec.service_time === '11:00 AM' ? '11:00 AM - 1:00 PM' : '8:00 AM - 10:00 AM';
 
     return {
       'N°': index + 1,
       'Fecha': rec.event_date || '',
+      'Culto / Horario': serviceLabel,
       'Hora Ingreso': checkInTime,
       'Nombre del Niño': child?.full_name || 'Desconocido',
       'Categoría': cat ? `${cat.name} (${cat.min_age}-${cat.max_age} años)` : 'Sin categoría',
@@ -50,6 +52,7 @@ export function exportAttendanceToExcel(
   detailWorksheet['!cols'] = [
     { wch: 6 },   // N°
     { wch: 12 },  // Fecha
+    { wch: 22 },  // Culto / Horario
     { wch: 14 },  // Hora Ingreso
     { wch: 28 },  // Nombre del Niño
     { wch: 24 },  // Categoría
@@ -95,14 +98,36 @@ export function exportAttendanceToExcel(
     emotStats[e] = (emotStats[e] || 0) + 1;
   });
 
+  // Service hour breakdown stats
+  const serviceStats = {
+    '8:00 AM - 10:00 AM': 0,
+    '11:00 AM - 1:00 PM': 0,
+  };
+  records.forEach(rec => {
+    if (rec.service_time === '11:00 AM') {
+      serviceStats['11:00 AM - 1:00 PM']++;
+    } else {
+      serviceStats['8:00 AM - 10:00 AM']++;
+    }
+  });
+
   const summaryData: (string | number)[][] = [
     ['RESUMEN DE ASISTENCIA - MINISTERIO DE NIÑOS'],
     ['Período / Fecha:', dateLabel],
     ['Total de Asistencias:', total],
     [],
-    ['DESGLOSE POR CATEGORÍA'],
-    ['Categoría', 'Rango de Edad', 'Cantidad de Niños', 'Porcentaje'],
+    ['DESGLOSE POR HORARIO DE CULTO'],
+    ['Culto Dominical', 'Cantidad de Niños', 'Porcentaje'],
   ];
+
+  Object.entries(serviceStats).forEach(([svc, count]) => {
+    const pct = total > 0 ? `${((count / total) * 100).toFixed(1)}%` : '0%';
+    summaryData.push([svc, count, pct]);
+  });
+
+  summaryData.push([]);
+  summaryData.push(['DESGLOSE POR CATEGORÍA']);
+  summaryData.push(['Categoría', 'Rango de Edad', 'Cantidad de Niños', 'Porcentaje']);
 
   categories.forEach(c => {
     const count = categoryCounts[c.name] || 0;

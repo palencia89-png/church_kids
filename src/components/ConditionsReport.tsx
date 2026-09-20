@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase, type Attendance, type Child, type Category } from '../lib/supabase';
+import { supabase, type Attendance, type Child, type Category, SERVICE_HOURS } from '../lib/supabase';
 import { fetchCategories, getChildCategory, getCategoryBadgeStyle, formatAge } from '../lib/categories';
 import { exportAttendanceToExcel } from '../lib/excelExport';
 import {
@@ -65,6 +65,7 @@ function getEmotBadge(cond?: string) {
 
 export default function ConditionsReport() {
   const [filter, setFilter] = useState<DateFilter>('today');
+  const [serviceTimeFilter, setServiceTimeFilter] = useState<'all' | '8:00 AM' | '11:00 AM'>('all');
   const [records, setRecords] = useState<AttendanceWithChild[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,11 +106,17 @@ export default function ConditionsReport() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
 
-  // Compute stats
-  const totalCheckIns = records.length;
+  // Filter records by service time if selected
+  const displayedRecords = records.filter(r => {
+    if (serviceTimeFilter === 'all') return true;
+    return (r.service_time || '8:00 AM') === serviceTimeFilter;
+  });
+
+  // Compute stats based on displayed records
+  const totalCheckIns = displayedRecords.length;
 
   // Alerts: sick, crying, injured, or has manual notes
-  const alertRecords = records.filter(r => {
+  const alertRecords = displayedRecords.filter(r => {
     const isSick = r.physical_condition === 'Enfermo';
     const isInjured = r.physical_condition === 'Lesión';
     const isCrying = r.emotional_condition === 'Llorando';
@@ -132,7 +139,7 @@ export default function ConditionsReport() {
   });
   let unassignedCatCount = 0;
 
-  records.forEach(r => {
+  displayedRecords.forEach(r => {
     const pc = (r.physical_condition || 'Sano') as keyof typeof physStats;
     if (physStats[pc] !== undefined) physStats[pc]++;
     else physStats.Sano++;
@@ -150,16 +157,18 @@ export default function ConditionsReport() {
   });
 
   const handleExportExcel = () => {
-    if (records.length === 0) {
-      alert('No hay registros para exportar en este período.');
+    if (displayedRecords.length === 0) {
+      alert('No hay registros para exportar en este período u horario.');
       return;
     }
     setExporting(true);
     try {
-      const filterLabel = filter === 'today' ? `Hoy_${todayStr()}` : filter === 'week' ? 'Ultimos_7_Dias' : filter === 'month' ? 'Mes_Actual' : 'Historico_Completo';
-      exportAttendanceToExcel(records, categories, {
-        dateLabel: filterLabel,
-        filenamePrefix: 'Reporte_Condiciones_Asistencia',
+      const dateLabel = filter === 'today' ? `Hoy_${todayStr()}` : filter === 'week' ? 'Ultimos_7_Dias' : filter === 'month' ? 'Mes_Actual' : 'Historico_Completo';
+      const serviceLabel = serviceTimeFilter === 'all' ? '' : serviceTimeFilter === '8:00 AM' ? '_8a10' : '_11a1';
+      const fullLabel = `${dateLabel}${serviceLabel}`;
+      exportAttendanceToExcel(displayedRecords, categories, {
+        dateLabel: fullLabel,
+        filenamePrefix: `Reporte_Condiciones_${fullLabel}`,
       });
     } catch (err) {
       console.error(err);
@@ -184,6 +193,40 @@ export default function ConditionsReport() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Service hour filter */}
+          <div className="flex items-center bg-gray-100 p-1 rounded-xl gap-1">
+            <span className="text-[11px] font-semibold text-gray-500 pl-2 pr-0.5 flex items-center gap-1">
+              <Clock size={12} /> Horario:
+            </span>
+            <button
+              onClick={() => setServiceTimeFilter('all')}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                serviceTimeFilter === 'all'
+                  ? 'bg-white text-gray-800 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-900'
+              }`}
+            >
+              Todos ({records.length})
+            </button>
+            {SERVICE_HOURS.map(h => {
+              const count = records.filter(r => (r.service_time || '8:00 AM') === h.id).length;
+              return (
+                <button
+                  key={h.id}
+                  onClick={() => setServiceTimeFilter(h.id)}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    serviceTimeFilter === h.id
+                      ? 'bg-white text-sky-700 shadow-sm font-bold'
+                      : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  {h.shortLabel} ({count})
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Date range filter */}
           <div className="flex bg-gray-100 p-1 rounded-xl gap-1">
             {[
               { id: 'today', label: 'Hoy' },
@@ -207,7 +250,7 @@ export default function ConditionsReport() {
 
           <button
             onClick={handleExportExcel}
-            disabled={exporting || records.length === 0}
+            disabled={exporting || displayedRecords.length === 0}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-all disabled:opacity-50"
             title="Exportar registros filtrados a Excel"
           >
@@ -438,6 +481,9 @@ export default function ConditionsReport() {
                               <span>{formatDate(rec.event_date)}</span>
                               <Clock size={10} className="ml-1" />
                               <span>{new Date(rec.checked_in_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>
+                              <span className="ml-1 px-1.5 py-0.2 rounded bg-sky-50 text-sky-700 font-bold text-[9px] border border-sky-100">
+                                {rec.service_time === '11:00 AM' ? '11 a 1' : '8 a 10'}
+                              </span>
                             </div>
                           </div>
                         </div>

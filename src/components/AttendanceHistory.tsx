@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase, type Attendance, type Child, type Category } from '../lib/supabase';
+import { supabase, type Attendance, type Child, type Category, SERVICE_HOURS } from '../lib/supabase';
 import { fetchCategories, getChildCategory, getCategoryBadgeStyle, formatAge } from '../lib/categories';
 import { exportAttendanceToExcel } from '../lib/excelExport';
 import {
@@ -14,6 +14,7 @@ import {
   Download,
   X,
   Sparkles,
+  Clock,
 } from 'lucide-react';
 
 type AttendanceWithChild = Attendance & { child: Child };
@@ -56,6 +57,7 @@ export default function AttendanceHistory() {
   const [records, setRecords] = useState<AttendanceWithChild[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [serviceTimeFilter, setServiceTimeFilter] = useState<'all' | '8:00 AM' | '11:00 AM'>('all');
   const [loading, setLoading] = useState(false);
   const [dates, setDates] = useState<string[]>([]);
   const [exportModalOpen, setExportModalOpen] = useState(false);
@@ -93,9 +95,15 @@ export default function AttendanceHistory() {
   };
 
   const filteredRecords = records.filter(r => {
-    if (categoryFilter === 'all') return true;
-    const cat = getChildCategory(r.child, categories);
-    return cat?.id === categoryFilter;
+    if (categoryFilter !== 'all') {
+      const cat = getChildCategory(r.child, categories);
+      if (cat?.id !== categoryFilter) return false;
+    }
+    if (serviceTimeFilter !== 'all') {
+      const st = r.service_time || '8:00 AM';
+      if (st !== serviceTimeFilter) return false;
+    }
+    return true;
   });
 
   const handleExportToday = () => {
@@ -105,9 +113,10 @@ export default function AttendanceHistory() {
     }
     setExporting(true);
     try {
-      exportAttendanceToExcel(records, categories, {
-        dateLabel: date,
-        filenamePrefix: `Asistencia_${date}`,
+      const serviceLabel = serviceTimeFilter === 'all' ? '' : serviceTimeFilter === '8:00 AM' ? '_8a10' : '_11a1';
+      exportAttendanceToExcel(filteredRecords, categories, {
+        dateLabel: `${date}${serviceLabel}`,
+        filenamePrefix: `Asistencia_${date}${serviceLabel}`,
       });
       setExportModalOpen(false);
     } catch (err) {
@@ -242,41 +251,79 @@ export default function AttendanceHistory() {
             )}
           </div>
 
-          {/* Category Filter */}
-          {categories.length > 0 && records.length > 0 && (
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-              <button
-                onClick={() => setCategoryFilter('all')}
-                className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-                  categoryFilter === 'all'
-                    ? 'bg-gray-800 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                Todas ({records.length})
-              </button>
-              {categories.map(cat => {
-                const style = getCategoryBadgeStyle(cat.color);
-                const count = records.filter(r => getChildCategory(r.child, categories)?.id === cat.id).length;
-                if (count === 0) return null;
-                const isSelected = categoryFilter === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => setCategoryFilter(cat.id)}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-all border ${
-                      isSelected
-                        ? `${style.bg} ${style.text} ${style.border} font-bold ring-1 ring-amber-400`
-                        : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    <span>{cat.name}</span>
-                    <span className="text-[10px] opacity-75">({count})</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          {/* Filter Bar: Service Hours and Categories */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Service Hour Filter */}
+            {records.length > 0 && (
+              <div className="flex items-center bg-gray-100 p-1 rounded-xl gap-1 text-xs">
+                <span className="text-[11px] font-semibold text-gray-500 pl-2 pr-0.5 flex items-center gap-1">
+                  <Clock size={12} /> Horario:
+                </span>
+                <button
+                  onClick={() => setServiceTimeFilter('all')}
+                  className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                    serviceTimeFilter === 'all'
+                      ? 'bg-white text-gray-900 shadow-sm font-bold'
+                      : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  Todos ({records.length})
+                </button>
+                {SERVICE_HOURS.map(h => {
+                  const count = records.filter(r => (r.service_time || '8:00 AM') === h.id).length;
+                  return (
+                    <button
+                      key={h.id}
+                      onClick={() => setServiceTimeFilter(h.id)}
+                      className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                        serviceTimeFilter === h.id
+                          ? 'bg-white text-sky-700 shadow-sm font-bold'
+                          : 'text-gray-500 hover:text-gray-900'
+                      }`}
+                    >
+                      {h.shortLabel} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Category Filter */}
+            {categories.length > 0 && records.length > 0 && (
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs">
+                <button
+                  onClick={() => setCategoryFilter('all')}
+                  className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                    categoryFilter === 'all'
+                      ? 'bg-gray-800 text-white font-bold'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  Todas ({records.length})
+                </button>
+                {categories.map(cat => {
+                  const style = getCategoryBadgeStyle(cat.color);
+                  const count = records.filter(r => getChildCategory(r.child, categories)?.id === cat.id).length;
+                  if (count === 0) return null;
+                  const isSelected = categoryFilter === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => setCategoryFilter(cat.id)}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-all border ${
+                        isSelected
+                          ? `${style.bg} ${style.text} ${style.border} font-bold ring-1 ring-amber-400`
+                          : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span>{cat.name}</span>
+                      <span className="text-[10px] opacity-75">({count})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         {loading ? (
@@ -327,9 +374,14 @@ export default function AttendanceHistory() {
                         {formatAge(r.child?.birthdate)} · Tutor: {r.child?.parent1_name} {r.child?.parent1_phone && `(${r.child.parent1_phone})`}
                       </p>
                     </div>
-                    <span className="text-xs text-gray-400 flex-shrink-0 font-mono">
-                      {formatTime(r.checked_in_at)}
-                    </span>
+                    <div className="flex flex-col items-end flex-shrink-0">
+                      <span className="text-xs text-gray-500 font-mono font-medium">
+                        {formatTime(r.checked_in_at)}
+                      </span>
+                      <span className="mt-1 px-1.5 py-0.2 rounded text-[9px] font-bold border bg-sky-50 text-sky-700 border-sky-100">
+                        {r.service_time === '11:00 AM' ? '11 a 1' : '8 a 10'}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Conditions & Notes Row */}
