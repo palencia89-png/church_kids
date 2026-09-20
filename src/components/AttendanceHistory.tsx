@@ -15,6 +15,7 @@ import {
   X,
   Sparkles,
   Clock,
+  Trash2,
 } from 'lucide-react';
 
 type AttendanceWithChild = Attendance & { child: Child };
@@ -62,6 +63,7 @@ export default function AttendanceHistory() {
   const [dates, setDates] = useState<string[]>([]);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCategories().then(setCategories);
@@ -105,6 +107,23 @@ export default function AttendanceHistory() {
     }
     return true;
   });
+
+  const handleDeleteRecord = async (attendanceId: string, childName: string) => {
+    if (!confirm(`¿Estás seguro de eliminar el registro de asistencia de "${childName}"?\nSe borrará permanentemente de la base de datos.`)) {
+      return;
+    }
+    setDeletingId(attendanceId);
+    try {
+      const { error } = await supabase.from('attendance').delete().eq('id', attendanceId);
+      if (error) throw error;
+      setRecords(prev => prev.filter(r => r.id !== attendanceId));
+    } catch (err) {
+      console.error(err);
+      alert('Error al eliminar el registro de asistencia.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const handleExportToday = () => {
     if (records.length === 0) {
@@ -374,13 +393,28 @@ export default function AttendanceHistory() {
                         {formatAge(r.child?.birthdate)} · Tutor: {r.child?.parent1_name} {r.child?.parent1_phone && `(${r.child.parent1_phone})`}
                       </p>
                     </div>
-                    <div className="flex flex-col items-end flex-shrink-0">
-                      <span className="text-xs text-gray-500 font-mono font-medium">
-                        {formatTime(r.checked_in_at)}
-                      </span>
-                      <span className="mt-1 px-1.5 py-0.2 rounded text-[9px] font-bold border bg-sky-50 text-sky-700 border-sky-100">
-                        {r.service_time === '11:00 AM' ? '11 a 1' : '8 a 10'}
-                      </span>
+                    <div className="flex items-center gap-2.5 flex-shrink-0">
+                      <div className="flex flex-col items-end">
+                        <span className="text-xs text-gray-500 font-mono font-medium">
+                          {formatTime(r.checked_in_at)}
+                        </span>
+                        <span className="mt-1 px-1.5 py-0.2 rounded text-[9px] font-bold border bg-sky-50 text-sky-700 border-sky-100">
+                          {r.service_time === '11:00 AM' ? '11 a 1' : '8 a 10'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteRecord(r.id, r.child?.full_name || 'este niño')}
+                        disabled={deletingId === r.id}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-200"
+                        title="Eliminar este registro de asistencia de la base de datos"
+                      >
+                        {deletingId === r.id ? (
+                          <Loader2 size={15} className="animate-spin text-red-500" />
+                        ) : (
+                          <Trash2 size={15} />
+                        )}
+                      </button>
                     </div>
                   </div>
 

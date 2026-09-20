@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase, type Child, type Attendance, type Category, type ChurchEvent, SERVICE_HOURS, getCurrentServiceTime, type ServiceTimeId } from '../lib/supabase';
 import { fetchCategories, getChildCategory, getCategoryBadgeStyle, formatAge } from '../lib/categories';
 import { fetchEvents } from '../lib/events';
-import { Search, CheckCircle2, Loader2, UserCheck, Baby, X, FolderKanban, Calendar, Clock } from 'lucide-react';
+import { Search, CheckCircle2, Loader2, UserCheck, Baby, X, FolderKanban, Calendar, Clock, Trash2 } from 'lucide-react';
 
 type Props = {
   onCheckedIn?: () => void;
@@ -13,46 +13,67 @@ function todayStr() {
   return new Date().toISOString().split('T')[0];
 }
 
-function TodayList({ ids, categories }: { ids: string[]; categories: Category[] }) {
-  const [children, setChildren] = useState<Child[]>([]);
+type AttendanceWithChild = Attendance & { child?: Child };
 
-  useEffect(() => {
-    if (ids.length === 0) { setChildren([]); return; }
-    supabase
-      .from('children')
-      .select('*')
-      .in('id', ids)
-      .order('full_name')
-      .then(({ data }) => setChildren((data as Child[]) ?? []));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ids.join(',')]);
-
+function TodayList({
+  records,
+  categories,
+  onDeleteAttendance,
+  deletingId,
+}: {
+  records: AttendanceWithChild[];
+  categories: Category[];
+  onDeleteAttendance: (attendanceId: string, childName: string) => Promise<void>;
+  deletingId: string | null;
+}) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-      {children.map(c => {
+      {records.map(rec => {
+        const c = rec.child;
+        if (!c) return null;
         const cat = getChildCategory(c, categories);
         const style = cat ? getCategoryBadgeStyle(cat.color) : null;
+        const isDeleting = deletingId === rec.id;
+
         return (
-          <div key={c.id} className="flex items-center gap-2.5 p-2 rounded-xl bg-gray-50 border border-gray-100">
-            <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
-              {c.photo_url ? (
-                <img src={c.photo_url} alt={c.full_name} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <Baby size={14} className="text-gray-400" />
+          <div key={rec.id} className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-gray-50 border border-gray-100 hover:border-gray-200 transition-all">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 flex-shrink-0 shadow-inner">
+                {c.photo_url ? (
+                  <img src={c.photo_url} alt={c.full_name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Baby size={14} className="text-gray-400" />
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="text-xs font-semibold text-gray-800 truncate block">{c.full_name}</span>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  {cat && style ? (
+                    <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${style.bg} ${style.text} inline-block`}>
+                      {cat.name}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-gray-400">{formatAge(c.birthdate)}</span>
+                  )}
+                  <span className="text-[10px] text-gray-400 font-mono">
+                    {new Date(rec.checked_in_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
                 </div>
-              )}
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <span className="text-xs font-semibold text-gray-800 truncate block">{c.full_name}</span>
-              {cat && style ? (
-                <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${style.bg} ${style.text} inline-block`}>
-                  {cat.name}
-                </span>
-              ) : (
-                <span className="text-[10px] text-gray-400">{formatAge(c.birthdate)}</span>
-              )}
-            </div>
+
+            <button
+              type="button"
+              onClick={() => onDeleteAttendance(rec.id, c.full_name)}
+              disabled={isDeleting}
+              className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors flex-shrink-0"
+              title="Desmarcar la asistencia de este niño"
+            >
+              {isDeleting ? <Loader2 size={12} className="animate-spin text-red-500" /> : <Trash2 size={12} />}
+              <span>Desmarcar</span>
+            </button>
           </div>
         );
       })}
@@ -65,11 +86,12 @@ export default function CheckIn({ onCheckedIn, onGoToEventAttendance }: Props) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCatFilter, setSelectedCatFilter] = useState<string>('all');
   const [children, setChildren] = useState<Child[]>([]);
-  const [todayAttendance, setTodayAttendance] = useState<Attendance[]>([]);
+  const [todayAttendance, setTodayAttendance] = useState<AttendanceWithChild[]>([]);
   const [todayEvents, setTodayEvents] = useState<ChurchEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [checkingIn, setCheckingIn] = useState<string | null>(null);
   const [justChecked, setJustChecked] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedServiceTime, setSelectedServiceTime] = useState<ServiceTimeId>(getCurrentServiceTime());
 
   // Modal states
@@ -81,9 +103,9 @@ export default function CheckIn({ onCheckedIn, onGoToEventAttendance }: Props) {
   const loadTodayAttendance = useCallback(async () => {
     const { data } = await supabase
       .from('attendance')
-      .select('*')
+      .select('*, child:children(*)')
       .eq('event_date', todayStr());
-    setTodayAttendance((data as Attendance[]) ?? []);
+    setTodayAttendance((data as unknown as AttendanceWithChild[]) ?? []);
   }, []);
 
   useEffect(() => {
@@ -155,6 +177,24 @@ export default function CheckIn({ onCheckedIn, onGoToEventAttendance }: Props) {
       alert('Error al registrar asistencia.');
     } finally {
       setCheckingIn(null);
+    }
+  };
+
+  const handleDeleteAttendance = async (attendanceId: string, childName: string) => {
+    if (!confirm(`¿Deseas desmarcar la asistencia de "${childName}"?\nSe quitará su asistencia en este culto y el niño volverá a estar disponible para registrar.`)) {
+      return;
+    }
+    setDeletingId(attendanceId);
+    try {
+      const { error } = await supabase.from('attendance').delete().eq('id', attendanceId);
+      if (error) throw error;
+      await loadTodayAttendance();
+      onCheckedIn?.();
+    } catch (err) {
+      console.error(err);
+      alert('Error al desmarcar la asistencia.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -330,29 +370,53 @@ export default function CheckIn({ onCheckedIn, onGoToEventAttendance }: Props) {
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={() => {
-                      setPhysCondition('Sano');
-                      setEmotCondition('Feliz');
-                      setObs('');
-                      setSelectedChild(child);
-                    }}
-                    disabled={alreadyIn || isCheckingIn}
-                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
-                      alreadyIn
-                        ? 'bg-emerald-100 text-emerald-700 cursor-default'
-                        : isCheckingIn
-                        ? 'bg-gray-100 text-gray-400 cursor-wait'
-                        : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm'
-                    }`}
-                  >
-                    {isCheckingIn ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <CheckCircle2 size={14} />
-                    )}
-                    {alreadyIn ? 'Ya ingresó' : isCheckingIn ? 'Registrando...' : 'Registrar'}
-                  </button>
+                  {alreadyIn ? (
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="inline-flex items-center gap-1 px-3 py-2 bg-emerald-100/80 text-emerald-800 text-xs font-bold rounded-xl border border-emerald-200 shadow-sm">
+                        <CheckCircle2 size={14} className="text-emerald-600" />
+                        <span>Presente</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const att = currentServiceAttendance.find(a => a.child_id === child.id);
+                          if (att) handleDeleteAttendance(att.id, child.full_name);
+                        }}
+                        disabled={deletingId !== null}
+                        className="flex items-center gap-1 px-3 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all shadow-sm"
+                        title="Desmarcar asistencia de este niño"
+                      >
+                        {deletingId && currentServiceAttendance.some(a => a.child_id === child.id && a.id === deletingId) ? (
+                          <Loader2 size={13} className="animate-spin text-red-500" />
+                        ) : (
+                          <Trash2 size={13} />
+                        )}
+                        <span>Desmarcar</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setPhysCondition('Sano');
+                        setEmotCondition('Feliz');
+                        setObs('');
+                        setSelectedChild(child);
+                      }}
+                      disabled={isCheckingIn}
+                      className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                        isCheckingIn
+                          ? 'bg-gray-100 text-gray-400 cursor-wait'
+                          : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm'
+                      }`}
+                    >
+                      {isCheckingIn ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <CheckCircle2 size={14} />
+                      )}
+                      {isCheckingIn ? 'Registrando...' : 'Registrar'}
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -400,7 +464,12 @@ export default function CheckIn({ onCheckedIn, onGoToEventAttendance }: Props) {
         {currentServiceAttendance.length === 0 ? (
           <p className="text-sm text-gray-400 text-center py-4">Aún no hay registros en este horario hoy</p>
         ) : (
-          <TodayList ids={Array.from(checkedInIds)} categories={categories} />
+          <TodayList
+            records={currentServiceAttendance}
+            categories={categories}
+            onDeleteAttendance={handleDeleteAttendance}
+            deletingId={deletingId}
+          />
         )}
       </div>
 

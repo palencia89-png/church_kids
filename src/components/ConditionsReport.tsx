@@ -15,6 +15,7 @@ import {
   Clock,
   FileSpreadsheet,
   FolderKanban,
+  Trash2,
 } from 'lucide-react';
 
 type AttendanceWithChild = Attendance & { child: Child };
@@ -71,6 +72,7 @@ export default function ConditionsReport() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCategories().then(setCategories);
@@ -105,6 +107,23 @@ export default function ConditionsReport() {
     fetchRecords();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
+
+  const handleDeleteAlertRecord = async (attendanceId: string, childName: string) => {
+    if (!confirm(`¿Deseas eliminar el registro de asistencia de "${childName}"?\nSe borrará de la base de datos y se actualizarán las estadísticas.`)) {
+      return;
+    }
+    setDeletingId(attendanceId);
+    try {
+      const { error } = await supabase.from('attendance').delete().eq('id', attendanceId);
+      if (error) throw error;
+      setRecords(prev => prev.filter(r => r.id !== attendanceId));
+    } catch (err) {
+      console.error(err);
+      alert('Error al eliminar el registro de asistencia.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   // Filter records by service time if selected
   const displayedRecords = records.filter(r => {
@@ -455,37 +474,52 @@ export default function ConditionsReport() {
                         key={rec.id}
                         className="p-4 rounded-xl border border-amber-100 bg-amber-50/10 hover:bg-amber-50/30 transition-colors space-y-3"
                       >
-                        {/* Kid Info */}
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-200 flex-shrink-0">
-                            {rec.child?.photo_url ? (
-                              <img src={rec.child.photo_url} alt={rec.child?.full_name} className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <Baby size={16} className="text-gray-300" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-bold text-gray-800 text-xs truncate">{rec.child?.full_name ?? 'Desconocido'}</h4>
-                              {cat && catStyle && (
-                                <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold border ${catStyle.bg} ${catStyle.text} ${catStyle.border}`}>
-                                  {cat.name}
-                                </span>
+                        {/* Kid Info Header */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-200 flex-shrink-0">
+                              {rec.child?.photo_url ? (
+                                <img src={rec.child.photo_url} alt={rec.child?.full_name} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <Baby size={16} className="text-gray-300" />
+                                </div>
                               )}
                             </div>
-                            <div className="flex items-center gap-1.5 text-[10px] text-gray-400 mt-0.5">
-                              {rec.child?.birthdate && <span>{formatAge(rec.child.birthdate)} ·</span>}
-                              <Calendar size={10} />
-                              <span>{formatDate(rec.event_date)}</span>
-                              <Clock size={10} className="ml-1" />
-                              <span>{new Date(rec.checked_in_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>
-                              <span className="ml-1 px-1.5 py-0.2 rounded bg-sky-50 text-sky-700 font-bold text-[9px] border border-sky-100">
-                                {rec.service_time === '11:00 AM' ? '11 a 1' : '8 a 10'}
-                              </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-bold text-gray-800 text-xs truncate">{rec.child?.full_name ?? 'Desconocido'}</h4>
+                                {cat && catStyle && (
+                                  <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold border ${catStyle.bg} ${catStyle.text} ${catStyle.border}`}>
+                                    {cat.name}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5 text-[10px] text-gray-400 mt-0.5">
+                                {rec.child?.birthdate && <span>{formatAge(rec.child.birthdate)} ·</span>}
+                                <Calendar size={10} />
+                                <span>{formatDate(rec.event_date)}</span>
+                                <Clock size={10} className="ml-1" />
+                                <span>{new Date(rec.checked_in_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>
+                                <span className="ml-1 px-1.5 py-0.2 rounded bg-sky-50 text-sky-700 font-bold text-[9px] border border-sky-100">
+                                  {rec.service_time === '11:00 AM' ? '11 a 1' : '8 a 10'}
+                                </span>
+                              </div>
                             </div>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteAlertRecord(rec.id, rec.child?.full_name || 'este niño')}
+                            disabled={deletingId === rec.id}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                            title="Eliminar este registro de asistencia"
+                          >
+                            {deletingId === rec.id ? (
+                              <Loader2 size={13} className="animate-spin text-red-500" />
+                            ) : (
+                              <Trash2 size={13} />
+                            )}
+                          </button>
                         </div>
 
                         {/* Badges */}
