@@ -8,6 +8,7 @@ import {
   getCategoryBadgeStyle,
   CATEGORY_COLORS,
   getChildCategory,
+  healCategoryDataOnce,
 } from '../lib/categories';
 import {
   FolderKanban,
@@ -135,6 +136,7 @@ export default function CategoriesManager() {
     }
     setAutoAssigning(true);
     try {
+      await healCategoryDataOnce(categories);
       const updated = await autoAssignCategories(children, categories);
       await loadData();
       setActionNotice(`¡Listo! Se actualizaron ${updated} niños según sus edades.`);
@@ -201,7 +203,7 @@ export default function CategoriesManager() {
         <div className="text-xs text-sky-900 space-y-1">
           <p className="font-semibold">¿Cómo funciona la categorización?</p>
           <p className="text-sky-800 leading-relaxed">
-            Puedes registrar tantas categorías como utilices en tu iglesia (por ejemplo: Categoría A de 1 a 3 años, Categoría B de 4 a 6 años, o salas de Cunas, Párvulos, etc.). Al ingresar o editar la fecha de nacimiento de cada niño, el sistema le asignará su categoría de forma automática o podrás elegirla manualmente.
+            Puedes configurar los rangos de edad según los salones de tu iglesia (por ejemplo: Categoría A de 0 a 6 años para cunas e inicial, Categoría B de 7 a 10 años para primarios, Categoría C de 11 a 15 años para pre-adolescentes). Al registrar o editar a un niño, el sistema le sugiere su categoría según su fecha de nacimiento y también puedes asignarla manualmente.
           </p>
         </div>
       </div>

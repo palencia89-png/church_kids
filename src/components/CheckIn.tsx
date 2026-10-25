@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase, type Child, type Attendance, type Category, type ChurchEvent, SERVICE_HOURS, getCurrentServiceTime, type ServiceTimeId } from '../lib/supabase';
 import { fetchCategories, getChildCategory, getCategoryBadgeStyle, formatAge } from '../lib/categories';
 import { fetchEvents } from '../lib/events';
-import { Search, CheckCircle2, Loader2, UserCheck, Baby, X, FolderKanban, Calendar, Clock, Trash2 } from 'lucide-react';
+import { Search, CheckCircle2, Loader2, UserCheck, Baby, X, FolderKanban, Calendar, Clock, Trash2, UserPlus } from 'lucide-react';
 
 type Props = {
   onCheckedIn?: () => void;
   onGoToEventAttendance?: (event: ChurchEvent) => void;
+  onRegisterChild?: () => void;
 };
 
 function todayStr() {
@@ -81,7 +82,7 @@ function TodayList({
   );
 }
 
-export default function CheckIn({ onCheckedIn, onGoToEventAttendance }: Props) {
+export default function CheckIn({ onCheckedIn, onGoToEventAttendance, onRegisterChild }: Props) {
   const [query, setQuery] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCatFilter, setSelectedCatFilter] = useState<string>('all');
@@ -229,14 +230,26 @@ export default function CheckIn({ onCheckedIn, onGoToEventAttendance }: Props) {
         </div>
       )}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center">
-            <UserCheck size={18} className="text-emerald-600" />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center">
+              <UserCheck size={18} className="text-emerald-600" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-gray-800">Registrar Asistencia</h2>
+              <p className="text-xs text-gray-500">Busca al niño por nombre y registra su ingreso con su categoría</p>
+            </div>
           </div>
-          <div>
-            <h2 className="font-semibold text-gray-800">Registrar Asistencia</h2>
-            <p className="text-xs text-gray-500">Busca al niño por nombre y registra su ingreso con su categoría</p>
-          </div>
+          {onRegisterChild && (
+            <button
+              type="button"
+              onClick={onRegisterChild}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-xs font-bold transition-all shadow-sm whitespace-nowrap self-start sm:self-auto"
+            >
+              <UserPlus size={15} />
+              <span>+ Registrar Niño Nuevo</span>
+            </button>
+          )}
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 p-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
@@ -326,9 +339,21 @@ export default function CheckIn({ onCheckedIn, onGoToEventAttendance }: Props) {
         )}
 
         {displayedChildren.length === 0 && !loading && (
-          <p className="text-sm text-gray-500 text-center mt-6 py-4">
-            No se encontraron niños {query ? `para "${query}"` : 'en esta categoría'}.
-          </p>
+          <div className="text-center py-8">
+            <p className="text-sm text-gray-500 mb-3">
+              No se encontraron niños {query ? `para "${query}"` : 'en esta categoría'}.
+            </p>
+            {onRegisterChild && (
+              <button
+                type="button"
+                onClick={onRegisterChild}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+              >
+                <UserPlus size={14} />
+                <span>Registrar niño nuevo e ingresar</span>
+              </button>
+            )}
+          </div>
         )}
 
         {displayedChildren.length > 0 && (

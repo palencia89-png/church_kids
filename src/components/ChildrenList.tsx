@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, type Child, type Category } from '../lib/supabase';
-import { fetchCategories, getChildCategory, getCategoryBadgeStyle, formatAge, autoAssignCategories } from '../lib/categories';
+import { fetchCategories, getChildCategory, getCategoryBadgeStyle, formatAge, autoAssignCategories, isChildCategoryOutOfSync, healCategoryDataOnce } from '../lib/categories';
 import { Search, UserPlus, Pencil, Trash2, Baby, Phone, Users, Loader2, FolderKanban, FileSpreadsheet, Sparkles, RefreshCw, CheckCircle2 } from 'lucide-react';
 import ImportChildrenModal from './ImportChildrenModal';
 
@@ -26,10 +26,11 @@ export default function ChildrenList({ onRegister, onEdit, refreshKey }: Props) 
     Promise.all([
       supabase.from('children').select('*').order('full_name'),
       fetchCategories(),
-    ]).then(([{ data: kids }, cats]) => {
+    ]).then(async ([{ data: kids }, cats]) => {
       setChildren((kids as Child[]) ?? []);
       setCategories(cats);
       setLoading(false);
+      await healCategoryDataOnce(cats);
     });
   }, [refreshKey]);
 
@@ -51,10 +52,7 @@ export default function ChildrenList({ onRegister, onEdit, refreshKey }: Props) 
     setDeleting(null);
   };
 
-  const outOfSyncChildren = children.filter(c => {
-    const computed = getChildCategory(c, categories);
-    return computed && c.category_id !== computed.id;
-  });
+  const outOfSyncChildren = children.filter(c => isChildCategoryOutOfSync(c, categories));
 
   const handleSyncCategories = async () => {
     setSyncing(true);
@@ -221,7 +219,9 @@ export default function ChildrenList({ onRegister, onEdit, refreshKey }: Props) 
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-gray-800 text-sm truncate">{child.full_name}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{formatAge(child.birthdate)}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {child.birthdate ? formatAge(child.birthdate) : <span className="text-gray-400 italic">Sin fecha de nacimiento</span>}
+                      </p>
 
                       {/* Category Badge */}
                       <div className="mt-1.5">

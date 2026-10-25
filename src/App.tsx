@@ -131,8 +131,10 @@ export default function App() {
         )}
         {tab === 'checkin' && (
           <CheckIn
+            key={refreshKey}
             onCheckedIn={() => setRefreshKey(k => k + 1)}
             onGoToEventAttendance={handleNavigateToEventAttendance}
+            onRegisterChild={() => { setEditChild(null); setShowRegister(true); }}
           />
         )}
         {tab === 'children' && (
@@ -152,11 +154,15 @@ export default function App() {
       {showRegister && (
         <RegisterChild
           editChild={editChild}
+          defaultAutoCheckIn={tab === 'checkin' || !editChild}
           onClose={() => { setShowRegister(false); setEditChild(null); }}
-          onSaved={() => {
+          onSaved={(_child, wasChecked) => {
             setShowRegister(false);
             setEditChild(null);
             setRefreshKey(k => k + 1);
+            if (wasChecked && tab !== 'checkin') {
+              setTab('checkin');
+            }
           }}
         />
       )}

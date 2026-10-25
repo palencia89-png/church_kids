@@ -1,20 +1,29 @@
 import { useState, useEffect } from 'react';
-import { supabase, type Child, type Category } from '../lib/supabase';
+import { supabase, type Child, type Category, SERVICE_HOURS, getCurrentServiceTime, type ServiceTimeId } from '../lib/supabase';
 import { fetchCategories, calculateAge, findCategoryForAge, getCategoryBadgeStyle } from '../lib/categories';
+import { fetchEvents } from '../lib/events';
 import PhotoCapture from './PhotoCapture';
-import { UserPlus, X, Save, Loader2, FolderKanban, Sparkles } from 'lucide-react';
+import { UserPlus, X, Save, Loader2, FolderKanban, Sparkles, UserCheck, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
 
 type Props = {
   onClose: () => void;
-  onSaved: (child: Child) => void;
+  onSaved: (child: Child, checkedIn?: boolean) => void;
   editChild?: Child | null;
+  defaultAutoCheckIn?: boolean;
 };
 
-export default function RegisterChild({ onClose, onSaved, editChild }: Props) {
+export default function RegisterChild({ onClose, onSaved, editChild, defaultAutoCheckIn = true }: Props) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [autoDetected, setAutoDetected] = useState<string | null>(null);
+
+  // Auto check-in state (only for new child)
+  const [autoCheckIn, setAutoCheckIn] = useState<boolean>(!editChild ? defaultAutoCheckIn : false);
+  const [serviceTime, setServiceTime] = useState<ServiceTimeId>(getCurrentServiceTime());
+  const [physicalCondition, setPhysicalCondition] = useState('Sano');
+  const [emotionalCondition, setEmotionalCondition] = useState('Feliz');
+  const [showCheckInDetails, setShowCheckInDetails] = useState(false);
 
   const [form, setForm] = useState({
     full_name: editChild?.full_name ?? '',
@@ -61,6 +70,39 @@ export default function RegisterChild({ onClose, onSaved, editChild }: Props) {
     }
   };
 
+  const performAutoCheckIn = async (childId: string) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      let activeEventId: string | null = null;
+      try {
+        const res = await fetchEvents();
+        const active = res.events.find(e => e.event_date === today || e.status === 'in_progress');
+        if (active) activeEventId = active.id;
+      } catch {
+        // ignore event error
+      }
+
+      const attendanceData: Record<string, unknown> = {
+        child_id: childId,
+        event_date: today,
+        checked_in_at: new Date().toISOString(),
+        service_time: serviceTime,
+        physical_condition: physicalCondition,
+        emotional_condition: emotionalCondition,
+        notes: '',
+      };
+      if (activeEventId) {
+        attendanceData.event_id = activeEventId;
+      }
+
+      const { error: attError } = await supabase.from('attendance').insert(attendanceData);
+      return !attError;
+    } catch (err) {
+      console.error('Error registrando ingreso automático:', err);
+      return false;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.full_name.trim() || !form.parent1_name.trim()) return;
@@ -81,8 +123,11 @@ export default function RegisterChild({ onClose, onSaved, editChild }: Props) {
         }
       }
 
+      const birthdateValue = form.birthdate && form.birthdate.trim() ? form.birthdate.trim() : null;
+
       const payload = {
         ...form,
+        birthdate: birthdateValue,
         category_id: form.category_id || null,
         photo_url,
       };
@@ -96,7 +141,7 @@ export default function RegisterChild({ onClose, onSaved, editChild }: Props) {
           .single();
         if (error) {
           // In case category_id column doesn't exist yet on remote Supabase children table
-          const fallbackPayload = { ...form, photo_url };
+          const fallbackPayload = { ...form, birthdate: birthdateValue, photo_url };
           delete (fallbackPayload as { category_id?: string | null }).category_id;
           const { data: retryData, error: retryError } = await supabase
             .from('children')
@@ -105,10 +150,10 @@ export default function RegisterChild({ onClose, onSaved, editChild }: Props) {
             .select()
             .single();
           if (retryError) throw retryError;
-          onSaved({ ...(retryData as Child), category_id: form.category_id });
+          onSaved({ ...(retryData as Child), category_id: form.category_id }, false);
           return;
         }
-        onSaved(data as Child);
+        onSaved(data as Child, false);
       } else {
         const { data, error } = await supabase
           .from('children')
@@ -117,7 +162,7 @@ export default function RegisterChild({ onClose, onSaved, editChild }: Props) {
           .single();
         if (error) {
           // Fallback if category_id column is not in remote children table yet
-          const fallbackPayload = { ...form, photo_url };
+          const fallbackPayload = { ...form, birthdate: birthdateValue, photo_url };
           delete (fallbackPayload as { category_id?: string | null }).category_id;
           const { data: retryData, error: retryError } = await supabase
             .from('children')
@@ -125,10 +170,20 @@ export default function RegisterChild({ onClose, onSaved, editChild }: Props) {
             .select()
             .single();
           if (retryError) throw retryError;
-          onSaved({ ...(retryData as Child), category_id: form.category_id });
+          const savedKid = { ...(retryData as Child), category_id: form.category_id };
+          let wasChecked = false;
+          if (autoCheckIn) {
+            wasChecked = await performAutoCheckIn(savedKid.id);
+          }
+          onSaved(savedKid, wasChecked);
           return;
         }
-        onSaved(data as Child);
+        const savedKid = data as Child;
+        let wasChecked = false;
+        if (autoCheckIn) {
+          wasChecked = await performAutoCheckIn(savedKid.id);
+        }
+        onSaved(savedKid, wasChecked);
       }
     } catch (err) {
       console.error(err);
@@ -182,7 +237,10 @@ export default function RegisterChild({ onClose, onSaved, editChild }: Props) {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de nacimiento</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700">Fecha de nacimiento</label>
+                <span className="text-[11px] text-gray-400 font-normal">Opcional</span>
+              </div>
               <input
                 type="date"
                 value={form.birthdate}
@@ -300,6 +358,97 @@ export default function RegisterChild({ onClose, onSaved, editChild }: Props) {
             />
           </div>
 
+          {/* Ingreso / Check-in Automático (Solo para registro de niño nuevo) */}
+          {!editChild && (
+            <div className="p-3.5 rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-50/80 via-blue-50/50 to-indigo-50/40 space-y-2.5 transition-all shadow-sm">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none flex-1">
+                  <input
+                    type="checkbox"
+                    checked={autoCheckIn}
+                    onChange={e => setAutoCheckIn(e.target.checked)}
+                    className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 border-gray-300"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                      <UserCheck size={14} className="text-sky-600" />
+                      Hacer ingreso automático
+                    </span>
+                    <p className="text-[11px] text-gray-500">
+                      Registra la asistencia del niño inmediatamente al guardar
+                    </p>
+                  </div>
+                </label>
+                {autoCheckIn && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-xs flex items-center gap-1">
+                    <CheckCircle2 size={10} /> Ingreso activo
+                  </span>
+                )}
+              </div>
+
+              {autoCheckIn && (
+                <div className="pt-2 border-t border-sky-200/60 space-y-2">
+                  <div className="flex items-center justify-between text-xs text-gray-600">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-semibold text-gray-700">Turno de culto:</span>
+                      <select
+                        value={serviceTime}
+                        onChange={e => setServiceTime(e.target.value as ServiceTimeId)}
+                        className="px-2 py-1 rounded-lg border border-sky-200 text-xs bg-white font-medium text-gray-800 focus:outline-none focus:ring-1 focus:ring-sky-400"
+                      >
+                        {SERVICE_HOURS.map(h => (
+                          <option key={h.id} value={h.id}>{h.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowCheckInDetails(v => !v)}
+                      className="text-[11px] text-sky-600 hover:text-sky-700 font-semibold flex items-center gap-0.5"
+                    >
+                      <span>{showCheckInDetails ? 'Menos detalles' : 'Más opciones (estado)'}</span>
+                      {showCheckInDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    </button>
+                  </div>
+
+                  {showCheckInDetails && (
+                    <div className="grid grid-cols-2 gap-2 pt-1.5 text-xs animate-in fade-in duration-200">
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-700 mb-0.5">Estado Físico</label>
+                        <select
+                          value={physicalCondition}
+                          onChange={e => setPhysicalCondition(e.target.value)}
+                          className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-xs bg-white"
+                        >
+                          <option value="Sano">Sano</option>
+                          <option value="Fiebre">Fiebre</option>
+                          <option value="Tos/Gripa">Tos / Gripa</option>
+                          <option value="Alergia">Alergia</option>
+                          <option value="Dolor de estómago">Dolor de estómago</option>
+                          <option value="Otro">Otro</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-700 mb-0.5">Estado Emocional</label>
+                        <select
+                          value={emotionalCondition}
+                          onChange={e => setEmotionalCondition(e.target.value)}
+                          className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-xs bg-white"
+                        >
+                          <option value="Feliz">Feliz</option>
+                          <option value="Tranquilo">Tranquilo</option>
+                          <option value="Llorando">Llorando</option>
+                          <option value="Tímido">Tímido</option>
+                          <option value="Inquieto">Inquieto</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex gap-3 pt-2">
             <button
               type="button"
@@ -311,10 +460,12 @@ export default function RegisterChild({ onClose, onSaved, editChild }: Props) {
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-sky-500 text-white rounded-lg font-medium hover:bg-sky-600 transition-colors text-sm disabled:opacity-60"
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-sky-500 text-white rounded-lg font-medium hover:bg-sky-600 transition-colors text-sm disabled:opacity-60 shadow-sm"
             >
               {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-              {saving ? 'Guardando...' : 'Guardar'}
+              {saving
+                ? 'Guardando...'
+                : (!editChild && autoCheckIn ? 'Guardar e Ingresar' : 'Guardar')}
             </button>
           </div>
         </form>

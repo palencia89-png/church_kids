@@ -100,6 +100,17 @@ function parseDate(rawVal: unknown, age: unknown, defaultAge: number): string | 
     s = s.replace(/[\?\"\'\=]/g, '').trim();
     s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
+    const isoMatch = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+    if (isoMatch) {
+      let y = parseInt(isoMatch[1], 10);
+      const m = parseInt(isoMatch[2], 10);
+      const d = parseInt(isoMatch[3], 10);
+      if (y >= 2025 && effectiveAge && effectiveAge > 0) y = 2026 - effectiveAge;
+      if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+        return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      }
+    }
+
     const slashMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?[\/\-]?$/);
     if (slashMatch) {
       const d = parseInt(slashMatch[1], 10);
@@ -165,7 +176,7 @@ export default function ImportChildrenModal({ onClose, onSuccess }: Props) {
         supabase.from('children').select('id, full_name'),
       ]);
 
-      const catA = categories.find(c => c.min_age === 3) || categories[0];
+      const catA = categories.find(c => c.min_age === 0 || c.min_age === 3) || categories[0];
       const catB = categories.find(c => c.min_age === 7) || categories[1];
       const catC = categories.find(c => c.min_age === 11) || categories[2];
 
@@ -200,13 +211,16 @@ export default function ImportChildrenModal({ onClose, onSuccess }: Props) {
 
         let matchedCat = catMap[sName];
         if (!matchedCat) {
-          // If sheet name has age numbers e.g. "3-6" or "7-10" or "11-13"
-          if (sName.includes('3') || sName.includes('4') || sName.includes('5') || sName.includes('6')) {
-            matchedCat = catMap['3-6 AÑOS'];
-          } else if (sName.includes('7') || sName.includes('8') || sName.includes('9') || sName.includes('10')) {
+          // If sheet name has age numbers e.g. "11-13" or "7-10" or "3-6"
+          // Crucial: check 11-13 first so '13' is not caught by '3'
+          if (/\b(11|12|13|14|15)\b/.test(sName) || sName.includes('11-13') || sName.includes('11 a 13')) {
+            matchedCat = catMap['11-13 AÑOS'];
+          } else if (/\b(7|8|9|10)\b/.test(sName) || sName.includes('7-10') || sName.includes('7 a 10')) {
             matchedCat = catMap['7-10 AÑOS'];
+          } else if (/\b(0|1|2|3|4|5|6)\b/.test(sName) || sName.includes('3-6') || sName.includes('3 a 6')) {
+            matchedCat = catMap['3-6 AÑOS'];
           } else {
-            matchedCat = catMap['11-13 AÑOS'] || catMap['3-6 AÑOS'];
+            matchedCat = catMap['3-6 AÑOS'];
           }
         }
 
