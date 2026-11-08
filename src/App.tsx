@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { UserCheck, Users, ClipboardList, Church, LogOut, Loader2, BarChart3, FolderKanban, Calendar } from 'lucide-react';
+import { UserCheck, Users, ClipboardList, LogOut, Loader2, BarChart3, FolderKanban, Calendar } from 'lucide-react';
 import { useAuth } from './lib/auth';
 import CheckIn from './components/CheckIn';
 import ChildrenList from './components/ChildrenList';
@@ -67,11 +67,13 @@ export default function App() {
       <header className="bg-white border-b border-gray-100 sticky top-0 z-40 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-sky-500 flex items-center justify-center flex-shrink-0 shadow-sm">
-              <Church size={20} className="text-white" />
-            </div>
-            <div>
-              <h1 className="font-bold text-gray-900 leading-tight text-base">Ministerio de Niños</h1>
+            <img
+              src="/logo.png"
+              alt="Adoración Children"
+              className="h-11 w-auto object-contain flex-shrink-0"
+            />
+            <div className="hidden xs:block sm:block border-l border-gray-200 pl-3">
+              <h1 className="font-bold text-gray-900 leading-tight text-sm sm:text-base">Adoración Children</h1>
               <p className="text-xs text-gray-400 leading-tight">Control y Registro de Asistencia</p>
             </div>
           </div>
